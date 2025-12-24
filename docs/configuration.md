@@ -55,7 +55,7 @@ model_id = "gpt-4o"
 
 ## Validation
 - All model names must be unique.
-- Mediator must reference a configured model and must not appear in the participant list.
+- Mediator is configured separately from participants and must not appear in the participant list.
 - If a model entry is missing required fields, fail fast.
 
 ## Secrets
