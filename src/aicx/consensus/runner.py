@@ -5,14 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aicx.consensus.digest import build_digest, update_digest_from_critiques
+from aicx.consensus.errors import check_round_responses
 from aicx.consensus.stop import should_stop
+from aicx.context.budget import ContextBudget, track_usage, would_exceed_budget
+from aicx.context.tokens import count_response_tokens
+from aicx.context.truncation import truncate_oldest_rounds
 from aicx.logging import log_event
 from aicx.types import (
     ConsensusResult,
     Digest,
     ExitCode,
     MediatorState,
-    QuorumError,
     Response,
     RunConfig,
 )
@@ -50,20 +53,31 @@ def run_consensus(
     """
     log_event("run_started", payload={"prompt": prompt})
 
+    # Initialize context budget if configured
+    budget: ContextBudget | None = None
+    if config.max_context_tokens is not None:
+        budget = ContextBudget(max_tokens=config.max_context_tokens)
+        log_event("budget_initialized", payload={"max_tokens": config.max_context_tokens})
+
     # Phase 1: Collect independent answers (Round 1)
     # NOTE: This is a stub until provider adapters are implemented
     # In the real implementation, this would call participant models
-    participant_responses = _collect_round1_responses(prompt, config)
+    participant_responses, failed_models_r1 = _collect_round1_responses(prompt, config)
 
-    # Check quorum
-    if len(participant_responses) < config.quorum:
-        raise QuorumError(
-            f"Insufficient responses: got {len(participant_responses)}, need {config.quorum}",
-            received=len(participant_responses),
-            required=config.quorum,
-        )
+    # Check quorum (raises ZeroResponseError or QuorumError if not met)
+    check_round_responses(participant_responses, config, round_index=1)
 
     log_event("round_completed", payload={"round": 1, "responses": len(participant_responses)})
+
+    # Track token usage for round 1
+    if budget is not None:
+        round_tokens = sum(count_response_tokens(r) for r in participant_responses)
+        budget = track_usage(budget, round_tokens, round_idx=0)
+        log_event("budget_tracked", payload={
+            "round": 1,
+            "round_tokens": round_tokens,
+            "total_used": budget.used_tokens,
+        })
 
     # Phase 2: Mediator synthesizes candidate answer and builds digest
     # NOTE: This is a stub until mediator provider is implemented
@@ -73,6 +87,8 @@ def run_consensus(
     log_event("synthesis_completed", payload={"candidate_length": len(mediator_state.candidate_answer)})
 
     all_responses = list(participant_responses)
+    all_failed_models = list(failed_models_r1)
+    round_indices = [0] * len(participant_responses)  # Track which round each response is from
     current_round = 1
     previous_candidate = None
 
@@ -80,16 +96,57 @@ def run_consensus(
     while current_round < config.max_rounds:
         current_round += 1
 
+        # Apply context budget truncation if needed before calling mediator
+        responses_for_mediator = all_responses
+        if budget is not None:
+            # Estimate tokens needed for this round
+            estimated_new_tokens = sum(count_response_tokens(r) for r in all_responses)
+
+            if would_exceed_budget(budget, estimated_new_tokens):
+                # Need to truncate oldest rounds
+                target_tokens = budget.max_tokens - budget.used_tokens
+                responses_for_mediator = list(truncate_oldest_rounds(
+                    tuple(all_responses),
+                    tuple(round_indices),
+                    budget,
+                    target_tokens,
+                ))
+
+                dropped_count = len(all_responses) - len(responses_for_mediator)
+                if dropped_count > 0:
+                    log_event("context_truncated", payload={
+                        "round": current_round,
+                        "dropped_responses": dropped_count,
+                        "target_tokens": target_tokens,
+                    })
+
         # Collect critiques from participants
         # NOTE: This is a stub until provider adapters are implemented
-        critiques = _collect_critique_responses(
+        critiques, failed_models_critique = _collect_critique_responses(
             prompt,
             mediator_state.candidate_answer,
             digest,
             config,
+            current_round,
         )
 
+        # Check quorum for critique round
+        check_round_responses(critiques, config, round_index=current_round)
+
+        # Track failed models across all rounds
+        all_failed_models.extend(failed_models_critique)
+
         log_event("round_completed", payload={"round": current_round, "critiques": len(critiques)})
+
+        # Track token usage for this round
+        if budget is not None:
+            round_tokens = sum(count_response_tokens(r) for r in critiques)
+            budget = track_usage(budget, round_tokens, round_idx=current_round - 1)
+            log_event("budget_tracked", payload={
+                "round": current_round,
+                "round_tokens": round_tokens,
+                "total_used": budget.used_tokens,
+            })
 
         # Count approvals and critical objections
         approval_count, critical_objections = _analyze_critiques(critiques)
@@ -142,6 +199,7 @@ def run_consensus(
         )
 
         all_responses.extend(critiques)
+        round_indices.extend([current_round - 1] * len(critiques))  # Add round indices for critiques
 
         log_event("candidate_updated", payload={"round": current_round})
 
@@ -170,11 +228,14 @@ def run_consensus(
             "prompt": prompt,
             "participants": len(config.models),
             "quorum": config.quorum,
+            "failed_models": tuple(sorted(set(all_failed_models))),
         },
     )
 
 
-def _collect_round1_responses(prompt: str, config: RunConfig) -> list[Response]:
+def _collect_round1_responses(
+    prompt: str, config: RunConfig
+) -> tuple[list[Response], tuple[str, ...]]:
     """
     Collect independent answers from all participants (Round 1).
 
@@ -190,7 +251,7 @@ def _collect_round1_responses(prompt: str, config: RunConfig) -> list[Response]:
         config: Run configuration
 
     Returns:
-        List of Response objects from participants
+        Tuple of (successful_responses, failed_model_names)
     """
     # Stub: Return empty list for now
     # Real implementation will call provider adapters
@@ -208,7 +269,7 @@ def _collect_round1_responses(prompt: str, config: RunConfig) -> list[Response]:
         )
         responses.append(response)
 
-    return responses
+    return responses, ()
 
 
 def _synthesize_candidate(
@@ -252,7 +313,8 @@ def _collect_critique_responses(
     candidate_answer: str,
     digest: Digest,
     config: RunConfig,
-) -> list[Response]:
+    round_index: int,
+) -> tuple[list[Response], tuple[str, ...]]:
     """
     Collect critique responses from participants (Round 2+).
 
@@ -268,9 +330,10 @@ def _collect_critique_responses(
         candidate_answer: Current candidate answer
         digest: Current digest
         config: Run configuration
+        round_index: Current round number
 
     Returns:
-        List of Response objects with critique data
+        Tuple of (successful_critiques, failed_model_names)
     """
     # Stub: Return empty list for now
     log_event("critique_stub", payload={"participants": len(config.models)})
@@ -292,7 +355,7 @@ def _collect_critique_responses(
         )
         critiques.append(critique)
 
-    return critiques
+    return critiques, ()
 
 
 def _update_candidate(
