@@ -32,6 +32,27 @@ class ExitCode(int, Enum):
 
 
 @dataclass(frozen=True)
+class RetryConfig:
+    """Configuration for retry policy."""
+
+    max_retries: int = 2
+    base_delay_seconds: float = 1.0
+    max_delay_seconds: float = 30.0
+    exponential_base: float = 2.0
+    jitter: bool = True
+
+    def __post_init__(self) -> None:
+        if self.max_retries < 0:
+            raise ValueError(f"max_retries must be >= 0, got {self.max_retries}")
+        if self.base_delay_seconds <= 0:
+            raise ValueError(f"base_delay_seconds must be > 0, got {self.base_delay_seconds}")
+        if self.max_delay_seconds <= 0:
+            raise ValueError(f"max_delay_seconds must be > 0, got {self.max_delay_seconds}")
+        if self.exponential_base <= 0:
+            raise ValueError(f"exponential_base must be > 0, got {self.exponential_base}")
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     """Configuration for a single model."""
 
@@ -42,6 +63,7 @@ class ModelConfig:
     max_tokens: int = 2048
     timeout_seconds: int = 60
     weight: float = 1.0
+    retry: RetryConfig | None = None
 
     def __post_init__(self) -> None:
         if self.weight < 0:
