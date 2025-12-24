@@ -6,6 +6,46 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
+### Phase 3 Complete - Robustness + Limits Implemented
+
+**Completed using parallel worktrees:**
+
+1. **Phase 3A: Quorum & Zero-Response Handling**
+   - `src/aicx/consensus/errors.py` - ZeroResponseError, check_round_responses helper
+   - `src/aicx/consensus/collection.py` - FailedModel dataclass, collect_responses_with_failures
+   - Updated `runner.py` - Per-round quorum checks, failed models in metadata
+   - Tests: `tests/test_quorum.py`
+
+2. **Phase 3B: Context Budget Enforcement**
+   - `src/aicx/context/tokens.py` - Token estimation using chars/4 ratio
+   - `src/aicx/context/budget.py` - ContextBudget dataclass, track_usage, would_exceed_budget
+   - `src/aicx/context/truncation.py` - truncate_oldest_rounds (keeps most recent), build_truncated_digest
+   - Updated `runner.py` - Budget initialization, tracking, truncation events
+   - Tests: `tests/test_context.py`
+
+3. **Phase 3C: Retry Policy**
+   - `src/aicx/types.py` - Added RetryConfig dataclass, retry field to ModelConfig
+   - `src/aicx/retry/classifier.py` - RETRYABLE_CODES (timeout, network, rate_limit, service_unavailable)
+   - `src/aicx/retry/executor.py` - calculate_delay with exponential backoff + jitter
+   - `src/aicx/retry/wrapper.py` - RetryableProvider transparent wrapper
+   - Tests: `tests/test_retry.py` (40 tests)
+
+**Documentation Updated:**
+- `docs/roadmap.md` - Marked Phase 3A, 3B, 3C as complete with file references
+- `docs/architecture.md` - Added consensus/errors.py, consensus/collection.py, context/, retry/ modules
+- `docs/testing.md` - Added test_quorum.py, test_context.py, test_retry.py; updated coverage table
+
+**Key Design Decisions:**
+- ZeroResponseError is distinct from QuorumError (different exit codes: 2 vs 3)
+- Token estimation uses chars/4 ratio (no external tokenizer in v1)
+- Context truncation always preserves the most recent round
+- Retry jitter uses 0-25% of base delay to avoid thundering herd
+- RetryableProvider is a transparent wrapper maintaining ProviderAdapter protocol
+
+---
+
+## Previous
+
 ### Phase 2 Complete - Provider Adapters Implemented
 
 **Completed:**
@@ -24,16 +64,6 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
    - Combines system+user prompts (Gemini API pattern)
    - Tests: `tests/test_gemini.py`
 
-**Documentation Updated:**
-- `docs/roadmap.md` - Marked Phase 0, 1, 2 as complete with file references
-- `docs/providers.md` - Added implementation details for all adapters
-- `docs/testing.md` - Added test file inventory and coverage table
-- `docs/architecture.md` - Updated with actual file structure
-
----
-
-## Previous
-
 ### Phase 1 Complete - Core Implementation
 
 **Implemented:**
@@ -44,17 +74,8 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 - JSONL audit logging with redaction (`logging.py`)
 - Comprehensive test suite (~250+ tests)
 
-### Responses to GPT Feedback (Phase 1)
-
-**Fixed:**
-1. `config/config.toml`: Changed `provider = "google"` to `provider = "gemini"`
-2. `src/aicx/__main__.py`: Changed help text from "summarization" to "truncation"
-
-**Clarification on mediator config:**
-The `[mediator]` section is separate from `[[model]]` entries by design. The mediator can use the same underlying model (e.g., gpt-4o) with a distinct name and different settings.
-
 ---
 
 ## No Blocking Concerns
 
-Ready to proceed with Phase 3 (Robustness + Limits).
+Ready to proceed with Phase 4 (UX + Docs Polish) or Phase 5 (Integration Testing).

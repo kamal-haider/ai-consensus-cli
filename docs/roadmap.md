@@ -50,10 +50,35 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
   - Uses `response_mime_type="application/json"`
   - Tests: `tests/test_gemini.py`
 
-## Phase 3: Robustness + Limits
-- Add quorum handling and zero-response errors.
-- Add context budget enforcement (truncate oldest rounds).
-- Add retry policy (if opted into v1).
+## Phase 3: Robustness + Limits ✅ COMPLETE
+
+### A) Quorum & Zero-Response Handling ✅
+- [x] ZeroResponseError for all-models-failed scenario (`src/aicx/consensus/errors.py`)
+- [x] `check_round_responses()` helper for quorum validation
+- [x] `collect_responses_with_failures()` with failure tracking (`src/aicx/consensus/collection.py`)
+- [x] FailedModel dataclass for error tracking
+- [x] Per-round quorum checks in runner (Round 1 + critique rounds)
+- [x] Failed models tracked in ConsensusResult metadata
+- [x] Tests: `tests/test_quorum.py`
+
+### B) Context Budget Enforcement ✅
+- [x] Token estimation using chars/4 ratio (`src/aicx/context/tokens.py`)
+- [x] ContextBudget dataclass with immutable tracking (`src/aicx/context/budget.py`)
+- [x] `track_usage()` and `would_exceed_budget()` helpers
+- [x] `truncate_oldest_rounds()` - removes oldest rounds first (`src/aicx/context/truncation.py`)
+- [x] `build_truncated_digest()` for truncated response digests
+- [x] Runner integration with budget initialization, tracking, and truncation events
+- [x] Tests: `tests/test_context.py`
+
+### C) Retry Policy ✅
+- [x] RetryConfig dataclass with validation (`src/aicx/types.py`)
+- [x] `retry` field added to ModelConfig
+- [x] Error classification: RETRYABLE_CODES vs NON_RETRYABLE_CODES (`src/aicx/retry/classifier.py`)
+- [x] `calculate_delay()` with exponential backoff and jitter (`src/aicx/retry/executor.py`)
+- [x] `execute_with_retry()` for retry execution logic
+- [x] RetryableProvider wrapper for transparent retry (`src/aicx/retry/wrapper.py`)
+- [x] `wrap_with_retry()` utility function
+- [x] Tests: `tests/test_retry.py`
 
 ## Phase 4: UX + Docs Polish
 - Improve CLI help text and examples.

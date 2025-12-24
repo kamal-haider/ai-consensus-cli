@@ -14,6 +14,7 @@
 - `tests/test_runner.py` - Consensus loop orchestration, round management
 - `tests/test_digest.py` - Digest construction, deterministic ordering
 - `tests/test_stop.py` - Stop conditions, Levenshtein change threshold (47 tests)
+- `tests/test_quorum.py` - Quorum validation, zero-response errors, failure tracking
 
 ### Providers
 - `tests/test_mock.py` - MockProvider and factory functions (82 tests)
@@ -24,6 +25,12 @@
 ### Parsing & Logging
 - `tests/test_parsing.py` - JSON parsing with 3-tier recovery, strict mode
 - `tests/test_logging.py` - JSONL audit logging, secret redaction
+
+### Context Budget
+- `tests/test_context.py` - Token estimation, budget tracking, truncation logic
+
+### Retry Policy
+- `tests/test_retry.py` - RetryConfig validation, error classification, backoff, wrapper
 
 ## Unit Tests
 - Consensus criteria logic (`test_stop.py`)
@@ -69,6 +76,14 @@ pytest -k "test_timeout"
 | `consensus/runner.py` | `test_runner.py` | Loop orchestration |
 | `consensus/digest.py` | `test_digest.py` | Digest construction |
 | `consensus/stop.py` | `test_stop.py` | Stop conditions |
+| `consensus/errors.py` | `test_quorum.py` | ZeroResponseError, quorum checks |
+| `consensus/collection.py` | `test_quorum.py` | Failure tracking |
+| `context/tokens.py` | `test_context.py` | Token estimation |
+| `context/budget.py` | `test_context.py` | Budget tracking |
+| `context/truncation.py` | `test_context.py` | Round truncation |
+| `retry/classifier.py` | `test_retry.py` | Error classification |
+| `retry/executor.py` | `test_retry.py` | Backoff calculation |
+| `retry/wrapper.py` | `test_retry.py` | Provider wrapper |
 | `models/mock.py` | `test_mock.py` | Mock provider |
 | `models/openai.py` | `test_openai.py` | OpenAI adapter |
 | `models/anthropic.py` | `test_anthropic.py` | Anthropic adapter |
