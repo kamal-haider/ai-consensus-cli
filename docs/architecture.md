@@ -16,21 +16,48 @@
 6) Consensus engine checks stop criteria.
 7) Output final candidate and disagreement summary.
 
-## Module Responsibilities (Proposed)
-- src/aicx/__main__.py
-  - CLI entrypoint, argument parsing, exit codes.
-- src/aicx/config.py
-  - Load/merge configuration, validation.
-- src/aicx/models/
-  - Provider adapters and registry.
-- src/aicx/consensus/
-  - Consensus loop, digest creation, stop logic.
-- src/aicx/prompts/
-  - Prompt templates and rendering.
-- src/aicx/logging.py
-  - Verbose audit output and redaction.
-- src/aicx/types.py
-  - Dataclasses and shared schemas.
+## Module Responsibilities (Implemented)
+
+```
+src/aicx/
+├── __main__.py          # CLI entrypoint, argparse, exit codes
+├── config.py            # TOML loading, validation, CLI override merging
+├── logging.py           # JSONL audit logging, secret redaction
+├── types.py             # Frozen dataclasses: ModelConfig, RunConfig, Response, etc.
+├── consensus/
+│   ├── __init__.py
+│   ├── runner.py        # Consensus loop orchestration
+│   ├── digest.py        # Digest construction with deterministic ordering
+│   └── stop.py          # Stop conditions, Levenshtein change threshold
+├── models/
+│   ├── __init__.py
+│   ├── registry.py      # ProviderAdapter protocol, ProviderRegistry, alias table
+│   ├── errors.py        # Error mapping utilities (network, API, parse)
+│   ├── mock.py          # MockProvider for testing
+│   ├── openai.py        # OpenAI adapter with JSON mode
+│   ├── anthropic.py     # Anthropic adapter (prompt-based JSON)
+│   └── gemini.py        # Gemini adapter with JSON mode
+└── prompts/
+    ├── __init__.py
+    ├── templates.py     # Prompt templates for participants/mediator
+    └── parsing.py       # JSON parsing with 3-tier recovery
+
+config/
+└── config.toml          # Default configuration
+
+tests/
+├── __init__.py
+├── test_config.py       # Config loading tests
+├── test_runner.py       # Consensus loop tests
+├── test_digest.py       # Digest construction tests
+├── test_stop.py         # Stop condition tests
+├── test_mock.py         # Mock provider tests
+├── test_openai.py       # OpenAI adapter tests
+├── test_anthropic.py    # Anthropic adapter tests
+├── test_gemini.py       # Gemini adapter tests
+├── test_parsing.py      # JSON parsing tests
+└── test_logging.py      # Logging tests
+```
 
 ## Determinism
 - Stable sorting of participants by name and version.
