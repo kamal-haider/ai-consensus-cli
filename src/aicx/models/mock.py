@@ -36,8 +36,12 @@ class MockProvider:
         Raises:
             Exception: If configured to raise an error on this call.
         """
+        # Capture current call index and increment for next call
+        call_index = self._response_index
+        self._response_index += 1
+
         # Check if we should raise an error on this call
-        if self._error_on_call is not None and self._response_index == self._error_on_call:
+        if self._error_on_call is not None and call_index == self._error_on_call:
             if self._error_to_raise is not None:
                 raise self._error_to_raise
             raise ProviderError("Mock provider error", provider=self.name)
@@ -57,8 +61,7 @@ class MockProvider:
             )
 
         # Cycle through configured responses
-        response = self._responses[self._response_index % len(self._responses)]
-        self._response_index += 1
+        response = self._responses[call_index % len(self._responses)]
         return response
 
     def configure_responses(self, responses: list[Response]) -> None:

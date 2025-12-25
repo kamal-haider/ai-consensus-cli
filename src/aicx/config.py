@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-import tomllib
+import sys
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -130,9 +135,20 @@ def _get_default_config() -> RunConfig:
         ),
     )
 
+    # Mediator must be separate from participants
+    default_mediator = ModelConfig(
+        name="gemini-1.5-pro",
+        provider="gemini",
+        model_id="gemini-1.5-pro",
+        temperature=0.2,
+        max_tokens=2048,
+        timeout_seconds=60,
+        weight=1.0,
+    )
+
     return RunConfig(
         models=default_models,
-        mediator=default_models[0],
+        mediator=default_mediator,
         max_rounds=3,
         approval_ratio=0.67,
         change_threshold=0.10,
@@ -267,7 +283,7 @@ def _apply_overrides(config: RunConfig, overrides: ConfigOverrides) -> RunConfig
     mediator = config.mediator
 
     # Override models if specified
-    if overrides.models:
+    if overrides.models is not None:
         names = [name.strip() for name in overrides.models.split(",") if name.strip()]
         if not names:
             raise ConfigError("--models flag cannot be empty")

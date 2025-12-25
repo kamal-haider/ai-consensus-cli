@@ -72,9 +72,11 @@ def execute_with_retry(
             if attempt > 0:
                 log_event(
                     "retry_success",
-                    provider=provider,
-                    attempt=attempt,
-                    total_attempts=total_attempts,
+                    model=provider,
+                    payload={
+                        "attempt": attempt,
+                        "total_attempts": total_attempts,
+                    },
                 )
             return result
         except ProviderError as error:
@@ -84,9 +86,11 @@ def execute_with_retry(
             if not is_retryable(error):
                 log_event(
                     "retry_not_retryable",
-                    provider=provider,
-                    error_code=error.code,
-                    message=str(error),
+                    model=provider,
+                    payload={
+                        "error_code": error.code,
+                        "message": str(error),
+                    },
                 )
                 raise
 
@@ -94,11 +98,13 @@ def execute_with_retry(
             if attempt >= retry_config.max_retries:
                 log_event(
                     "retry_exhausted",
-                    provider=provider,
-                    attempt=attempt,
-                    total_attempts=total_attempts,
-                    error_code=error.code,
-                    message=str(error),
+                    model=provider,
+                    payload={
+                        "attempt": attempt,
+                        "total_attempts": total_attempts,
+                        "error_code": error.code,
+                        "message": str(error),
+                    },
                 )
                 raise
 
@@ -111,12 +117,14 @@ def execute_with_retry(
 
             log_event(
                 "retry_attempt",
-                provider=provider,
-                attempt=attempt + 1,
-                total_attempts=total_attempts,
-                delay_seconds=delay,
-                error_code=error.code,
-                message=str(error),
+                model=provider,
+                payload={
+                    "attempt": attempt + 1,
+                    "total_attempts": total_attempts,
+                    "delay_seconds": delay,
+                    "error_code": error.code,
+                    "message": str(error),
+                },
             )
 
             # Sleep before retrying

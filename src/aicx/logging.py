@@ -11,7 +11,7 @@ from typing import Any
 
 _is_verbose = False
 
-# Patterns for redacting sensitive information
+# Patterns for redacting sensitive information in strings
 _SECRET_PATTERNS = [
     re.compile(r'(api[_-]?key\s*[=:]\s*)["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE),
     re.compile(r'(OPENAI_API_KEY\s*[=:]\s*)["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE),
@@ -20,6 +20,10 @@ _SECRET_PATTERNS = [
     re.compile(r'(bearer\s+)[a-zA-Z0-9_-]+', re.IGNORECASE),
     re.compile(r'(token\s*[=:]\s*)["\']?([a-zA-Z0-9_.-]+)["\']?', re.IGNORECASE),
 ]
+
+# Keys that should have their values redacted in dicts
+# Use word boundaries to avoid matching e.g. "original_tokens"
+_SENSITIVE_KEYS = re.compile(r'^(api[_-]?key|token|secret|password|credential)$', re.IGNORECASE)
 
 
 def configure_logging(verbose: bool) -> None:
@@ -46,7 +50,14 @@ def _redact_secrets(obj: Any) -> Any:
             obj = pattern.sub(r'\1[REDACTED]', obj)
         return obj
     elif isinstance(obj, dict):
-        return {k: _redact_secrets(v) for k, v in obj.items()}
+        result = {}
+        for k, v in obj.items():
+            # If the key matches a sensitive pattern, redact the value
+            if isinstance(k, str) and _SENSITIVE_KEYS.search(k):
+                result[k] = "[REDACTED]"
+            else:
+                result[k] = _redact_secrets(v)
+        return result
     elif isinstance(obj, (list, tuple)):
         return type(obj)(_redact_secrets(item) for item in obj)
     else:

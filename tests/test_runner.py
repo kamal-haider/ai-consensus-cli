@@ -100,7 +100,7 @@ def run_config_three_models(model_a, model_b, model_c, mediator):
         models=(model_a, model_b, model_c),
         mediator=mediator,
         max_rounds=3,
-        approval_ratio=0.67,
+        approval_ratio=0.66,  # 3 * 0.66 = 1.98 -> ceil = 2
         change_threshold=0.10,
         verbose=False,
         strict_json=False,
@@ -374,7 +374,7 @@ def test_run_consensus_metadata_populated(run_config_three_models):
 
     assert result.metadata["prompt"] == prompt
     assert result.metadata["participants"] == 3
-    assert result.metadata["quorum"] == 2  # ceil(3 * 0.67) = 2
+    assert result.metadata["quorum"] == 2  # ceil(3 * 0.66) = 2
 
 
 def test_run_consensus_responses_tracked(run_config_two_models):

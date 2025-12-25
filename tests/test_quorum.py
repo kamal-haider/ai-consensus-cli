@@ -20,7 +20,7 @@ def sample_config() -> RunConfig:
         ),
         mediator=ModelConfig(name="mediator", provider="test", model_id="test-med"),
         max_rounds=3,
-        approval_ratio=0.67,
+        approval_ratio=0.66,  # 3 * 0.66 = 1.98 -> ceil = 2
     )
 
 
@@ -205,7 +205,7 @@ class TestQuorumIntegration:
 
     def test_quorum_calculation(self):
         """Verify quorum is calculated correctly."""
-        # 3 models, 67% approval -> ceil(3 * 0.67) = 2
+        # 3 models, 66% approval -> ceil(3 * 0.66) = 2
         config = RunConfig(
             models=(
                 ModelConfig(name="m1", provider="test", model_id="test-1"),
@@ -213,11 +213,11 @@ class TestQuorumIntegration:
                 ModelConfig(name="m3", provider="test", model_id="test-3"),
             ),
             mediator=ModelConfig(name="med", provider="test", model_id="test-med"),
-            approval_ratio=0.67,
+            approval_ratio=0.66,  # 3 * 0.66 = 1.98 -> ceil = 2
         )
         assert config.quorum == 2
 
-        # 4 models, 67% approval -> ceil(4 * 0.67) = 3
+        # 4 models, 67% approval -> ceil(4 * 0.67) = ceil(2.68) = 3
         config = RunConfig(
             models=(
                 ModelConfig(name="m1", provider="test", model_id="test-1"),

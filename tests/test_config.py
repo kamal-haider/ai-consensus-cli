@@ -18,7 +18,7 @@ def test_default_config_when_no_file_exists():
     assert len(config.models) == 2
     assert config.models[0].name == "gpt-4o"
     assert config.models[1].name == "claude-3-5"
-    assert config.mediator.name == "gpt-4o"
+    assert config.mediator.name == "gemini-1.5-pro"  # Mediator must be separate from participants
     assert config.max_rounds == 3
     assert config.approval_ratio == 0.67
     assert config.change_threshold == 0.10
@@ -375,6 +375,11 @@ name = "model-a"
 provider = "openai"
 model_id = "gpt-4"
 
+[[model]]
+name = "model-b"
+provider = "openai"
+model_id = "gpt-4"
+
 [mediator]
 name = "mediator-1"
 provider = "openai"
@@ -386,8 +391,9 @@ model_id = "gpt-4o"
         temp_path = f.name
 
     try:
+        # Override models to include mediator as a participant
         with pytest.raises(ConfigError, match="cannot also be a participant"):
-            load_config(config_path=temp_path, models="mediator-1")
+            load_config(config_path=temp_path, models="mediator-1,model-a")
     finally:
         Path(temp_path).unlink()
 
