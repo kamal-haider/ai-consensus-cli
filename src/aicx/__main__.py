@@ -12,24 +12,27 @@ from aicx.logging import configure_logging
 from aicx.types import ConfigError, ExitCode
 
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 EXAMPLES = """
 Examples:
   aicx "Explain Rust ownership"
-      Basic usage with default models (gpt-4o, claude-3-5, gemini-2)
+      Basic usage with default models
 
-  aicx "Summarize this code" --models gpt-4o,claude-3-5 --rounds 2
-      Use specific models with fewer rounds
+  aicx "Summarize this code" --models gpt,claude --rounds 2
+      Use shorthand model names with fewer rounds
+
+  aicx "Review this design" --models gpt-4o,claude-sonnet-4-20250514
+      Use specific model IDs directly
 
   aicx "Review this design" --verbose
       Enable detailed audit logging to stderr
 
-  aicx "Complex analysis" --max-context-tokens 8000
-      Limit context size (triggers truncation of older rounds)
+  aicx --setup
+      Run interactive setup wizard to configure defaults
 
-  aicx "Quick check" --approval-ratio 0.5
-      Lower consensus threshold (majority instead of 2/3)
+  aicx --status
+      Show current configuration and API key status
 
 Exit Codes:
   0  Success (consensus reached or best-effort answer)
@@ -54,12 +57,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "prompt",
+        nargs="?",
+        default=None,
         help="The question or task to submit to the consensus loop",
     )
     parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {VERSION}",
+    )
+
+    # Setup and status commands
+    setup_group = parser.add_argument_group("Setup")
+    setup_group.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run interactive setup wizard to configure default models and mediator",
+    )
+    setup_group.add_argument(
+        "--status",
+        action="store_true",
+        help="Show current configuration and API key status",
     )
 
     # Model selection
@@ -161,6 +179,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # Handle setup command
+    if args.setup:
+        from aicx.setup import run_setup
+
+        return run_setup()
+
+    # Handle status command
+    if args.status:
+        from aicx.setup import run_status
+
+        return run_status()
+
+    # Require prompt for normal operation
+    if not args.prompt:
+        parser.print_help()
+        sys.stderr.write("\nError: prompt is required (or use --setup/--status)\n")
+        return ExitCode.CONFIG_ERROR
 
     try:
         # Load and validate configuration

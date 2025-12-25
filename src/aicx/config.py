@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from aicx.types import ConfigError, ModelConfig, RunConfig, ShareMode
+from aicx.user_config import (
+    DEFAULT_PROVIDER_MODELS,
+    PROVIDER_SHORTHANDS,
+    UserPreferences,
+    expand_shorthand,
+    is_shorthand,
+    load_user_preferences,
+)
 
 
 DEFAULT_CONFIG_PATH = Path("config/config.toml")
@@ -48,6 +56,8 @@ def load_config(
 ) -> RunConfig:
     """Load and validate configuration from file and CLI overrides.
 
+    Fallback chain: CLI flags -> user config -> project config -> built-in defaults
+
     Args:
         config_path: Path to TOML config file, or None to use default.
         models: Comma-separated model names to use (overrides config).
@@ -78,11 +88,14 @@ def load_config(
         verbose=verbose,
     )
 
+    # Load user preferences
+    user_prefs = load_user_preferences()
+
     # Load base config from file or defaults
     base_config = _load_from_file(config_path)
 
-    # Apply CLI overrides
-    return _apply_overrides(base_config, overrides)
+    # Apply user preferences, then CLI overrides
+    return _apply_overrides(base_config, overrides, user_prefs)
 
 
 def _load_from_file(config_path: str | None) -> RunConfig:
@@ -266,12 +279,19 @@ def _parse_model_config(data: dict[str, Any]) -> ModelConfig:
     )
 
 
-def _apply_overrides(config: RunConfig, overrides: ConfigOverrides) -> RunConfig:
-    """Apply CLI overrides to config.
+def _apply_overrides(
+    config: RunConfig,
+    overrides: ConfigOverrides,
+    user_prefs: UserPreferences | None = None,
+) -> RunConfig:
+    """Apply user preferences and CLI overrides to config.
+
+    Fallback chain: CLI flags -> user config -> project config
 
     Args:
         config: Base configuration.
         overrides: CLI flag overrides.
+        user_prefs: User preferences from user config.
 
     Returns:
         Updated RunConfig.
@@ -279,44 +299,41 @@ def _apply_overrides(config: RunConfig, overrides: ConfigOverrides) -> RunConfig
     Raises:
         ConfigError: If override values are invalid.
     """
+    if user_prefs is None:
+        user_prefs = UserPreferences.empty()
+
     models = config.models
     mediator = config.mediator
 
-    # Override models if specified
+    # Build model name map for lookup (includes all defined models)
+    model_map = {model.name: model for model in config.models}
+    model_map[config.mediator.name] = config.mediator
+
+    # Determine which models to use (CLI -> user prefs -> config)
+    model_names: list[str] | None = None
     if overrides.models is not None:
-        names = [name.strip() for name in overrides.models.split(",") if name.strip()]
-        if not names:
+        model_names = [name.strip() for name in overrides.models.split(",") if name.strip()]
+        if not model_names:
             raise ConfigError("--models flag cannot be empty")
+    elif user_prefs.default_models:
+        model_names = list(user_prefs.default_models)
 
-        # Build model name map for lookup
-        model_map = {model.name: model for model in config.models}
-
-        # Also include mediator in lookup
-        model_map[mediator.name] = mediator
-
+    if model_names is not None:
         selected_models = []
-        for name in names:
-            if name not in model_map:
-                available = ", ".join(sorted(model_map.keys()))
-                raise ConfigError(
-                    f"Model '{name}' not found in config. Available: {available}"
-                )
-            selected_models.append(model_map[name])
-
+        for name in model_names:
+            model = _resolve_model(name, model_map, user_prefs)
+            selected_models.append(model)
         models = tuple(selected_models)
 
-    # Override mediator if specified
+    # Determine mediator (CLI -> user prefs -> config)
+    mediator_name: str | None = None
     if overrides.mediator:
-        # Build model name map for lookup (from original config)
-        model_map = {model.name: model for model in config.models}
-        model_map[config.mediator.name] = config.mediator
+        mediator_name = overrides.mediator
+    elif user_prefs.default_mediator:
+        mediator_name = user_prefs.default_mediator
 
-        if overrides.mediator not in model_map:
-            available = ", ".join(sorted(model_map.keys()))
-            raise ConfigError(
-                f"Mediator '{overrides.mediator}' not found in config. Available: {available}"
-            )
-        mediator = model_map[overrides.mediator]
+    if mediator_name is not None:
+        mediator = _resolve_model(mediator_name, model_map, user_prefs)
 
     # Validate mediator is not in participant list
     if mediator in models:
@@ -359,3 +376,84 @@ def _apply_overrides(config: RunConfig, overrides: ConfigOverrides) -> RunConfig
         verbose=overrides.verbose if overrides.verbose is not None else config.verbose,
         share_mode=share_mode,
     )
+
+
+def _resolve_model(
+    name: str,
+    model_map: dict[str, ModelConfig],
+    user_prefs: UserPreferences,
+) -> ModelConfig:
+    """Resolve a model name or shorthand to a ModelConfig.
+
+    Args:
+        name: Model name, shorthand (gpt, claude, gemini), or model_id.
+        model_map: Map of known model names to ModelConfig.
+        user_prefs: User preferences with custom shorthand mappings.
+
+    Returns:
+        ModelConfig for the resolved model.
+
+    Raises:
+        ConfigError: If model cannot be resolved.
+    """
+    # First, check if it's a known model name from config
+    if name in model_map:
+        return model_map[name]
+
+    # Check if it's a shorthand (gpt, claude, gemini)
+    if is_shorthand(name, user_prefs):
+        provider, model_id = expand_shorthand(name, user_prefs)
+        # Create a new ModelConfig for this shorthand
+        return ModelConfig(
+            name=name,
+            provider=provider,
+            model_id=model_id,
+            temperature=0.2,
+            max_tokens=2048,
+            timeout_seconds=60,
+            weight=1.0,
+        )
+
+    # Check if it's a raw model_id that matches a known model
+    for model in model_map.values():
+        if model.model_id == name:
+            return model
+
+    # Try to infer provider from model_id prefix and create ad-hoc config
+    provider = _infer_provider(name)
+    if provider:
+        return ModelConfig(
+            name=name,
+            provider=provider,
+            model_id=name,
+            temperature=0.2,
+            max_tokens=2048,
+            timeout_seconds=60,
+            weight=1.0,
+        )
+
+    # Unknown model
+    available = ", ".join(sorted(model_map.keys()))
+    shorthands = ", ".join(sorted(PROVIDER_SHORTHANDS.keys()))
+    raise ConfigError(
+        f"Model '{name}' not found. Available: {available}. Shorthands: {shorthands}"
+    )
+
+
+def _infer_provider(model_id: str) -> str | None:
+    """Infer provider from model ID prefix.
+
+    Args:
+        model_id: The model identifier.
+
+    Returns:
+        Provider name or None if cannot infer.
+    """
+    model_lower = model_id.lower()
+    if model_lower.startswith("gpt") or model_lower.startswith("o1"):
+        return "openai"
+    if model_lower.startswith("claude"):
+        return "anthropic"
+    if model_lower.startswith("gemini"):
+        return "gemini"
+    return None

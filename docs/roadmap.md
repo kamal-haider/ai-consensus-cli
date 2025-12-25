@@ -122,3 +122,54 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
   - Added Python 3.10 classifier
 
 **Test count: 418 tests (391 unit + 27 integration)**
+
+## Phase 6: Configuration UX + Interactive Help (In Progress)
+
+### A) Interactive Setup Guide ✅
+- [x] `--setup` flag launches interactive configuration wizard
+- [x] Prompt user to select default models (from available providers)
+- [x] Prompt user to select default mediator
+- [x] Save preferences to user config (`~/.config/aicx/config.toml`)
+- [x] Validate API keys are set for selected providers
+- [x] Show confirmation of saved settings
+
+### B) Default Model Behavior ✅
+- [x] Running `aicx "prompt"` without `--models` uses configured defaults
+- [x] Defaults stored in user config, separate from project config
+- [x] Fallback chain: CLI flags → user config → project config → built-in defaults
+
+### C) Model Shorthand Aliases ✅
+- [x] Support shorthand names: `gpt`, `claude`, `gemini`
+- [x] Map to user's configured default version for each provider
+- [x] Example: `--models gpt claude` expands to `gpt-4o,claude-sonnet-4` (or user's defaults)
+- [x] Allow mixing shorthand and full names: `--models gpt claude-sonnet-4-20250514`
+
+### D) Status Command ✅
+- [x] `--status` shows current configuration summary:
+  - Default models configured
+  - Default mediator
+  - API key status (set/not set, not the actual keys)
+  - Config file locations being used
+  - Available model aliases
+
+### E) Interactive Help Assistant
+- [ ] `--help "question"` invokes AI assistant for CLI questions
+- [ ] Uses mediator model to answer questions about CLI usage
+- [ ] Scoped to CLI-related questions only (not general knowledge)
+- [ ] Can suggest commands or offer to run them
+- [ ] Example: `--help "How do I configure a new model?"` → explains or runs `--setup`
+- [ ] Distinguishes from `--help` (no argument) which shows traditional help menu
+- [ ] Response should be concise and actionable
+
+### F) Digest Improvements for Structured Data
+- [ ] Detect JSON/structured data in responses
+- [ ] Skip sentence-based digest for structured data
+- [ ] Generate prose summary for JSON responses (optional)
+- [ ] Reduce false "digest format" objections from models
+
+## Phase 7: Future Enhancements (Ideas)
+- [ ] Parallel model calls (concurrent API requests)
+- [ ] Streaming output support
+- [ ] Local model support (Ollama, llama.cpp)
+- [ ] Web UI for consensus visualization
+- [ ] Plugin system for custom providers

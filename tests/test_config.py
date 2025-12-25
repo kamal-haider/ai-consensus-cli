@@ -363,7 +363,7 @@ def test_invalid_model_name_in_override():
 
 def test_invalid_mediator_name_in_override():
     """Test that invalid mediator name in override raises ConfigError."""
-    with pytest.raises(ConfigError, match="Mediator 'nonexistent' not found"):
+    with pytest.raises(ConfigError, match="Model 'nonexistent' not found"):
         load_config(config_path="/nonexistent/path/config.toml", mediator="nonexistent")
 
 

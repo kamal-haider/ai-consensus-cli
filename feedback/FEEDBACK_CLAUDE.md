@@ -6,53 +6,50 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
-### Phase 6 Planned - Configuration UX + Interactive Help
+### Phase 6A-D Complete - Setup Wizard & Configuration UX
 
-Added to roadmap (`docs/roadmap.md`):
+Implemented and tested:
 
-**A) Interactive Setup Guide (`--setup`)**
+**A) Interactive Setup Guide (`--setup`)** ✅
 - Interactive wizard to configure default models and mediator
 - Saves to user config (`~/.config/aicx/config.toml`)
 - Validates API keys for selected providers
+- Shows available models per provider
 
-**B) Default Model Behavior**
+**B) Default Model Behavior** ✅
 - `aicx "prompt"` without `--models` uses configured defaults
 - Fallback chain: CLI flags → user config → project config → built-in defaults
+- Ad-hoc model resolution from model ID prefixes (gpt-*, claude-*, gemini-*)
 
-**C) Model Shorthand Aliases**
+**C) Model Shorthand Aliases** ✅
 - `--models gpt claude gemini` expands to full model names
 - Maps to user's configured default version for each provider
 - Allows mixing shorthand and full names
 
-**D) Status Command (`--status`)**
+**D) Status Command (`--status`)** ✅
 - Shows default models, mediator, API key status
 - Lists config file locations and available aliases
+
+### Remaining Phase 6 Work
 
 **E) Interactive Help Assistant (`--help "question"`)**
 - AI-powered help for CLI questions
 - Uses mediator model, scoped to CLI topics only
-- Can suggest or run commands (e.g., `--help "configure new model"` → runs `--setup`)
-- Distinguishes from `--help` (traditional help menu)
+- Can suggest or run commands
 
 **F) Digest Improvements for Structured Data**
 - Detect JSON responses and skip sentence-based digest
 - Reduces false "digest format" objections from models
 
-### Bug Fixes Committed
-
-**Provider wiring + JSON fixes (`b8f3c0f` + uncommitted):**
-- Anthropic prefill for reliable JSON output
-- JSON extraction from markdown code blocks
-- Non-string answer serialization (lists/dicts → JSON strings)
-- Updated config with valid Claude model ID
-
 ---
 
 ## Previous
 
-### Provider Wiring Complete
+### v1.0 Released
 
-Factory pattern, real provider calls, retry integration.
+Tagged and released on GitHub with full consensus protocol, all 3 providers, and 438 tests.
+
+### Phase 6 Planned - Configuration UX + Interactive Help
 
 ### Phase 5 Complete - Integration Testing + Packaging
 
@@ -68,16 +65,17 @@ Factory pattern, real provider calls, retry integration.
 
 ## Project Status
 
-**Completed:** Phases 0-5 + provider wiring + JSON fixes
-**Planned:** Phase 6 (Configuration UX + Interactive Help)
+**Completed:** Phases 0-5 + v1.0 release + Phase 6A-D (setup wizard)
+**In Progress:** Phase 6E-F (interactive help, digest improvements)
 
-**Uncommitted changes:**
-- `src/aicx/models/anthropic.py` (prefill + JSON extraction)
-- `src/aicx/models/openai.py` (non-string answer serialization)
-- `src/aicx/models/gemini.py` (non-string answer serialization)
-- `src/aicx/models/registry.py` (updated model aliases)
-- `tests/test_anthropic.py` (prefill test updates)
-- `config/config.toml` (valid Claude model ID)
-- `docs/roadmap.md` (Phase 6 added)
+**New files:**
+- `src/aicx/user_config.py` - User config management
+- `src/aicx/setup.py` - Interactive setup wizard
+- `tests/test_user_config.py` - User config tests (20 tests)
 
-**All 418 tests pass.**
+**Modified files:**
+- `src/aicx/__main__.py` - Added --setup, --status flags
+- `src/aicx/config.py` - Added user prefs and shorthand expansion
+- `docs/roadmap.md` - Phase 6A-D marked complete
+
+**All 438 tests pass.**

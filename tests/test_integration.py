@@ -214,7 +214,7 @@ class TestCLIVersion:
 
     def test_version_matches_pyproject(self):
         """Test that CLI version matches pyproject.toml."""
-        assert VERSION == "0.1.0"
+        assert VERSION == "1.0.0"
 
 
 # Integration tests: Config loading
@@ -344,4 +344,4 @@ class TestEndToEnd:
         )
 
         assert result.returncode == 0
-        assert "0.1.0" in result.stdout
+        assert "1.0.0" in result.stdout
