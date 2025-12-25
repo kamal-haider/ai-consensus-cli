@@ -175,7 +175,11 @@ def run_consensus(
                 approval_count=approval_count,
                 critical_objections=critical_objections,
                 disagreement_summary=_build_disagreement_summary(
-                    critiques, critical_objections
+                    critiques,
+                    critical_objections,
+                    approval_count,
+                    len(config.models),
+                    config.approval_ratio,
                 ) if reason != "consensus_reached" else None,
             )
             break
@@ -417,26 +421,72 @@ def _analyze_critiques(critiques: list[Response]) -> tuple[int, tuple[str, ...]]
     return approval_count, tuple(critical_objections)
 
 
+def _calculate_confidence(
+    approval_count: int,
+    total_participants: int,
+    critical_count: int,
+    approval_ratio: float,
+) -> str:
+    """
+    Calculate a confidence indicator based on consensus metrics.
+
+    Args:
+        approval_count: Number of approvals received
+        total_participants: Total number of participants
+        critical_count: Number of critical objections
+        approval_ratio: Required approval ratio
+
+    Returns:
+        Confidence level: "HIGH", "MEDIUM", or "LOW"
+    """
+    if total_participants == 0:
+        return "LOW"
+
+    actual_ratio = approval_count / total_participants
+
+    # HIGH: >= required ratio and no critical objections
+    if actual_ratio >= approval_ratio and critical_count == 0:
+        return "HIGH"
+
+    # MEDIUM: >= 50% approval and <= 1 critical objection
+    if actual_ratio >= 0.5 and critical_count <= 1:
+        return "MEDIUM"
+
+    # LOW: otherwise
+    return "LOW"
+
+
 def _build_disagreement_summary(
     critiques: list[Response],
     critical_objections: tuple[str, ...],
+    approval_count: int,
+    total_participants: int,
+    approval_ratio: float,
 ) -> str:
     """
     Build a disagreement summary when consensus is not reached.
 
     Includes:
-    - Top 3 unresolved objections
-    - Any remaining missing items
-    - A note explaining why consensus failed
+    - Consensus status with approval count
+    - Confidence indicator
+    - Top unresolved issues
 
     Args:
         critiques: List of critique responses
         critical_objections: Critical objections from critiques
+        approval_count: Number of approvals
+        total_participants: Total number of participants
+        approval_ratio: Required approval ratio
 
     Returns:
         Formatted disagreement summary string
     """
-    # Collect all objections and missing items
+    # Calculate confidence
+    confidence = _calculate_confidence(
+        approval_count, total_participants, len(critical_objections), approval_ratio
+    )
+
+    # Collect all objections and missing items from non-approving critiques
     all_objections = []
     all_missing = []
 
@@ -445,24 +495,31 @@ def _build_disagreement_summary(
             all_objections.extend(critique.objections)
             all_missing.extend(critique.missing)
 
-    # Build summary
-    lines = ["Disagreement Summary:"]
+    # Build summary with clear structure
+    lines = ["---"]
+    lines.append(
+        f"Consensus: NOT REACHED ({approval_count}/{total_participants} approvals, "
+        f"{len(critical_objections)} critical objection{'s' if len(critical_objections) != 1 else ''})"
+    )
+    lines.append(f"Confidence: {confidence}")
 
-    if critical_objections:
-        lines.append(f"\nCritical objections ({len(critical_objections)}):")
-        for obj in critical_objections[:3]:
-            lines.append(f"- {obj}")
+    # Add unresolved issues if any
+    has_issues = critical_objections or all_objections or all_missing
+    if has_issues:
+        lines.append("")
+        lines.append("Unresolved Issues:")
 
-    if all_objections:
-        lines.append(f"\nTop objections ({len(all_objections)}):")
-        for obj in all_objections[:3]:
-            lines.append(f"- {obj}")
+        # Critical objections first
+        for obj in critical_objections[:2]:
+            lines.append(f"- Critical: {obj}")
 
-    if all_missing:
-        lines.append(f"\nMissing items ({len(all_missing)}):")
-        for item in all_missing[:3]:
-            lines.append(f"- {item}")
+        # Then regular objections
+        remaining_slots = 3 - min(len(critical_objections), 2)
+        for obj in all_objections[:remaining_slots]:
+            lines.append(f"- Objection: {obj}")
 
-    lines.append("\nConsensus not reached within round limits.")
+        # Then missing items
+        for item in all_missing[:2]:
+            lines.append(f"- Missing: {item}")
 
     return "\n".join(lines)

@@ -80,10 +80,27 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
 - [x] `wrap_with_retry()` utility function
 - [x] Tests: `tests/test_retry.py`
 
-## Phase 4: UX + Docs Polish
-- Improve CLI help text and examples.
-- Clarify error messages and exit code guidance.
-- Add disagreement summaries and consensus confidence notes.
+## Phase 4: UX + Docs Polish ✅ COMPLETE
+
+### A) CLI Help Text ✅
+- [x] Added epilog with usage examples and exit codes
+- [x] Grouped arguments by category (Model Selection, Consensus, Context, Behavior, Config)
+- [x] Added `--version` flag
+- [x] Improved help descriptions with metavars
+
+### B) Error Messages ✅
+- [x] Updated `docs/errors.md` with comprehensive error type documentation
+- [x] Added resolution steps for each error type
+- [x] Documented retry configuration (now implemented)
+- [x] Added exit code reference table
+
+### C) Disagreement Summary + Confidence ✅
+- [x] Added `_calculate_confidence()` function (HIGH/MEDIUM/LOW based on approvals and critical objections)
+- [x] Enhanced `_build_disagreement_summary()` with:
+  - Consensus status line with approval count
+  - Confidence indicator
+  - Categorized issues (Critical/Objection/Missing)
+- [x] Updated `docs/cli.md` with output format documentation
 
 ## Phase 5: Integration Testing + Packaging
 - Add minimal happy-path consensus test.

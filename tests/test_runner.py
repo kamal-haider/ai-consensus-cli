@@ -227,13 +227,16 @@ def test_build_disagreement_summary_with_critical():
     ]
     critical_objections = ("Critical issue 1", "Critical issue 2")
 
-    summary = _build_disagreement_summary(critiques, critical_objections)
+    summary = _build_disagreement_summary(
+        critiques, critical_objections,
+        approval_count=0, total_participants=3, approval_ratio=0.67
+    )
 
-    assert "Disagreement Summary:" in summary
-    assert "Critical objections (2):" in summary
-    assert "Critical issue 1" in summary
-    assert "Critical issue 2" in summary
-    assert "Consensus not reached within round limits." in summary
+    assert "Consensus: NOT REACHED" in summary
+    assert "2 critical objections" in summary
+    assert "Confidence:" in summary
+    assert "Critical: Critical issue 1" in summary
+    assert "Critical: Critical issue 2" in summary
 
 
 def test_build_disagreement_summary_with_objections():
@@ -256,14 +259,17 @@ def test_build_disagreement_summary_with_objections():
     ]
     critical_objections = ()
 
-    summary = _build_disagreement_summary(critiques, critical_objections)
+    summary = _build_disagreement_summary(
+        critiques, critical_objections,
+        approval_count=1, total_participants=3, approval_ratio=0.67
+    )
 
-    assert "Top objections (4):" in summary
-    assert "Objection 1" in summary
-    assert "Objection 2" in summary
-    assert "Objection 3" in summary
-    # Should only show top 3
-    assert "Objection 4" not in summary
+    assert "Consensus: NOT REACHED" in summary
+    assert "0 critical objection" in summary
+    assert "Unresolved Issues:" in summary
+    assert "Objection: Objection 1" in summary
+    assert "Objection: Objection 2" in summary
+    assert "Objection: Objection 3" in summary
 
 
 def test_build_disagreement_summary_with_missing():
@@ -280,11 +286,14 @@ def test_build_disagreement_summary_with_missing():
     ]
     critical_objections = ()
 
-    summary = _build_disagreement_summary(critiques, critical_objections)
+    summary = _build_disagreement_summary(
+        critiques, critical_objections,
+        approval_count=2, total_participants=3, approval_ratio=0.67
+    )
 
-    assert "Missing items (2):" in summary
-    assert "Missing A" in summary
-    assert "Missing B" in summary
+    assert "Unresolved Issues:" in summary
+    assert "Missing: Missing A" in summary
+    assert "Missing: Missing B" in summary
 
 
 def test_build_disagreement_summary_empty():
@@ -292,10 +301,13 @@ def test_build_disagreement_summary_empty():
     critiques = []
     critical_objections = ()
 
-    summary = _build_disagreement_summary(critiques, critical_objections)
+    summary = _build_disagreement_summary(
+        critiques, critical_objections,
+        approval_count=1, total_participants=3, approval_ratio=0.67
+    )
 
-    assert "Disagreement Summary:" in summary
-    assert "Consensus not reached within round limits." in summary
+    assert "Consensus: NOT REACHED" in summary
+    assert "Confidence:" in summary
 
 
 # Tests: run_consensus function
@@ -615,7 +627,7 @@ def test_analyze_critiques_preserves_order():
 
 
 def test_build_disagreement_summary_truncates_long_lists():
-    """Test that disagreement summary shows only top 3 items."""
+    """Test that disagreement summary shows only top items."""
     critiques = [
         Response(
             model_name="model-a",
@@ -627,9 +639,12 @@ def test_build_disagreement_summary_truncates_long_lists():
     ]
     critical_objections = ()
 
-    summary = _build_disagreement_summary(critiques, critical_objections)
+    summary = _build_disagreement_summary(
+        critiques, critical_objections,
+        approval_count=1, total_participants=3, approval_ratio=0.67
+    )
 
-    # Should show first 3 objections
+    # Should show first 3 objections (no critical, so all 3 slots for regular)
     assert "Obj1" in summary
     assert "Obj2" in summary
     assert "Obj3" in summary
