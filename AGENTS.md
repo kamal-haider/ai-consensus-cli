@@ -37,3 +37,4 @@
 - Do not touch any Claude-related files or directories.
 - If protocol or operating rules change, update the `/init` file accordingly.
 - In `feedback/FEEDBACK_GPT.md`, keep the latest update separated from previous updates.
+- Do not create mirror copies of `docs/` in `gpt/`; reference `docs/` directly.
