@@ -108,7 +108,10 @@ class OpenAIProvider:
                 raise map_parse_error(raw_content, f"Invalid JSON: {e}")
 
             # Extract fields from parsed JSON
+            # Ensure answer is a string (serialize if it's a list/dict)
             answer = parsed.get("answer", "")
+            if not isinstance(answer, str):
+                answer = json.dumps(answer, indent=2)
 
             # Build Response object
             return Response(

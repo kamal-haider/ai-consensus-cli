@@ -6,50 +6,59 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
-### Provider Wiring Complete - Real Providers Connected to Runner
+### Phase 6 Planned - Configuration UX + Interactive Help
 
-**Implemented:**
+Added to roadmap (`docs/roadmap.md`):
 
-1. **Provider Factory (`src/aicx/models/factory.py`)**:
-   - `create_provider(ModelConfig)` - Instantiates OpenAI, Anthropic, Gemini, or Mock providers
-   - `create_providers(configs)` - Creates providers for multiple models
-   - `get_available_providers()` - Lists registered providers
-   - Automatic retry wrapping when ModelConfig has retry config
+**A) Interactive Setup Guide (`--setup`)**
+- Interactive wizard to configure default models and mediator
+- Saves to user config (`~/.config/aicx/config.toml`)
+- Validates API keys for selected providers
 
-2. **Runner Updates (`src/aicx/consensus/runner.py`)**:
-   - Added helper functions: `_format_digest()`, `_format_responses_for_mediator()`, `_format_critiques_for_mediator()`
-   - Replaced all 4 stub functions with real implementations:
-     - `_collect_round1_responses()` - Calls participants with `participant_prompt()`
-     - `_synthesize_candidate()` - Calls mediator with `mediator_synthesis_prompt()`
-     - `_collect_critique_responses()` - Calls participants with `critique_prompt()`
-     - `_update_candidate()` - Calls mediator with `mediator_update_prompt()`
-   - Providers created once at start and reused throughout consensus loop
+**B) Default Model Behavior**
+- `aicx "prompt"` without `--models` uses configured defaults
+- Fallback chain: CLI flags → user config → project config → built-in defaults
 
-3. **Test Fixture Updates (`tests/test_runner.py`)**:
-   - Changed fixtures from real provider names to `mock` provider
-   - Ensures unit tests work without API keys
+**C) Model Shorthand Aliases**
+- `--models gpt claude gemini` expands to full model names
+- Maps to user's configured default version for each provider
+- Allows mixing shorthand and full names
 
-**All 418 tests pass.**
+**D) Status Command (`--status`)**
+- Shows default models, mediator, API key status
+- Lists config file locations and available aliases
 
-**CLI is now fully functional:**
-- With API keys set: Uses real OpenAI, Anthropic, Gemini providers
-- Without API keys: Tests use mock providers
+**E) Interactive Help Assistant (`--help "question"`)**
+- AI-powered help for CLI questions
+- Uses mediator model, scoped to CLI topics only
+- Can suggest or run commands (e.g., `--help "configure new model"` → runs `--setup`)
+- Distinguishes from `--help` (traditional help menu)
+
+**F) Digest Improvements for Structured Data**
+- Detect JSON responses and skip sentence-based digest
+- Reduces false "digest format" objections from models
+
+### Bug Fixes Committed
+
+**Provider wiring + JSON fixes (`b8f3c0f` + uncommitted):**
+- Anthropic prefill for reliable JSON output
+- JSON extraction from markdown code blocks
+- Non-string answer serialization (lists/dicts → JSON strings)
+- Updated config with valid Claude model ID
 
 ---
 
 ## Previous
 
-### Phase 5 Complete - Integration Testing + Packaging
+### Provider Wiring Complete
 
-Integration tests (27 tests), Python 3.10+ support, tomli dependency.
+Factory pattern, real provider calls, retry integration.
+
+### Phase 5 Complete - Integration Testing + Packaging
 
 ### Phase 4 Complete - UX + Docs Polish
 
-CLI help, error docs, disagreement summary with confidence indicator.
-
 ### Phase 3 Complete - Robustness + Limits
-
-Quorum handling, context budget, retry policy.
 
 ### Phase 2 Complete - Provider Adapters
 
@@ -59,19 +68,16 @@ Quorum handling, context budget, retry policy.
 
 ## Project Status
 
-All 5 phases + provider wiring implemented:
-- Phase 0: Foundations
-- Phase 1: Core Implementation
-- Phase 2: Provider Adapters
-- Phase 3: Robustness + Limits
-- Phase 4: UX + Docs Polish
-- Phase 5: Integration Testing + Packaging
-- Post-Phase: Provider wiring (stubs replaced with real calls)
+**Completed:** Phases 0-5 + provider wiring + JSON fixes
+**Planned:** Phase 6 (Configuration UX + Interactive Help)
 
 **Uncommitted changes:**
-- `src/aicx/models/factory.py` (new)
-- `src/aicx/models/__init__.py` (factory exports)
-- `src/aicx/consensus/runner.py` (real provider calls)
-- `tests/test_runner.py` (mock provider fixtures)
+- `src/aicx/models/anthropic.py` (prefill + JSON extraction)
+- `src/aicx/models/openai.py` (non-string answer serialization)
+- `src/aicx/models/gemini.py` (non-string answer serialization)
+- `src/aicx/models/registry.py` (updated model aliases)
+- `tests/test_anthropic.py` (prefill test updates)
+- `config/config.toml` (valid Claude model ID)
+- `docs/roadmap.md` (Phase 6 added)
 
-Ready for commit and real-world testing with API keys.
+**All 418 tests pass.**

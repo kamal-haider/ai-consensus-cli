@@ -4,12 +4,48 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 
 from anthropic import Anthropic, APIConnectionError, APITimeoutError, APIError
 
 from aicx.models.errors import map_api_error, map_network_error, map_parse_error
 from aicx.types import ModelConfig, ParseError, PromptRequest, ProviderError, Response
+
+
+def _extract_json(text: str) -> str:
+    """Extract JSON from text that may contain markdown or surrounding text.
+
+    Args:
+        text: Raw text that may contain JSON.
+
+    Returns:
+        Extracted JSON string.
+
+    Raises:
+        ParseError: If no valid JSON can be extracted.
+    """
+    # If it's already valid JSON, return as-is
+    text = text.strip()
+    if text.startswith("{") and text.endswith("}"):
+        return text
+
+    # Try to extract from markdown code block
+    # Match ```json ... ``` or ``` ... ```
+    code_block_pattern = r"```(?:json)?\s*\n?(.*?)\n?```"
+    match = re.search(code_block_pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    # Try to find JSON object in the text
+    # Look for first { and last }
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        return text[first_brace : last_brace + 1]
+
+    # Return original if no extraction possible
+    return text
 
 
 @dataclass
@@ -64,12 +100,19 @@ class AnthropicProvider:
             )
 
         try:
+            # Build messages with prefill to encourage JSON output
+            # Prefill starts the assistant response with "{" to force JSON
+            messages = [
+                {"role": "user", "content": request.user_prompt},
+                {"role": "assistant", "content": "{"},
+            ]
+
             # Build the API request
             # Anthropic uses system as a separate parameter
             response = self._client.messages.create(
                 model=self.model_config.model_id,
                 system=request.system_prompt,
-                messages=[{"role": "user", "content": request.user_prompt}],
+                messages=messages,
                 temperature=self.model_config.temperature,
                 max_tokens=self.model_config.max_tokens,
                 timeout=self.model_config.timeout_seconds,
@@ -84,16 +127,23 @@ class AnthropicProvider:
                     raw_output=str(response),
                 )
 
-            raw_output = response.content[0].text
+            # Reconstruct JSON by prepending the prefill "{"
+            raw_output = "{" + response.content[0].text
+
+            # Extract JSON from potential markdown or surrounding text
+            json_str = _extract_json(raw_output)
 
             # Parse the JSON response
             try:
-                parsed = json.loads(raw_output)
+                parsed = json.loads(json_str)
             except json.JSONDecodeError as e:
                 raise map_parse_error(raw_output, f"Invalid JSON: {e}")
 
             # Extract fields from parsed JSON
+            # Ensure answer is a string (serialize if it's a list/dict)
             answer = parsed.get("answer", "")
+            if not isinstance(answer, str):
+                answer = json.dumps(answer, indent=2)
 
             return Response(
                 model_name=self.model_config.name,

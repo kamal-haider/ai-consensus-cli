@@ -38,12 +38,24 @@ def prompt_request():
 
 
 def create_mock_response(content: str):
-    """Create a mock Anthropic response."""
+    """Create a mock Anthropic response.
+
+    Note: The Anthropic provider uses prefill (starts assistant response with "{"),
+    so mock responses should NOT include the leading "{". The code prepends it.
+    """
     mock_response = MagicMock()
     mock_content_block = MagicMock()
     mock_content_block.text = content
     mock_response.content = [mock_content_block]
     return mock_response
+
+
+def json_without_leading_brace(obj: dict) -> str:
+    """Convert dict to JSON string without the leading '{'.
+
+    This simulates what Claude returns when using prefill (assistant: "{").
+    """
+    return json.dumps(obj)[1:]  # Remove first character '{'
 
 
 class TestAnthropicProviderCreation:
@@ -86,7 +98,8 @@ class TestAnthropicProviderCompletion:
                     "critical": False,
                     "confidence": 0.95,
                 }
-                mock_response = create_mock_response(json.dumps(json_response))
+                # Use prefill-style response (without leading "{")
+                mock_response = create_mock_response(json_without_leading_brace(json_response))
                 mock_client.messages.create.return_value = mock_response
 
                 response = provider.create_chat_completion(prompt_request)
@@ -115,7 +128,8 @@ class TestAnthropicProviderCompletion:
                     "edits": ["Add step-by-step"],
                     "confidence": 0.8,
                 }
-                mock_response = create_mock_response(json.dumps(json_response))
+                # Use prefill-style response (without leading "{")
+                mock_response = create_mock_response(json_without_leading_brace(json_response))
                 mock_client.messages.create.return_value = mock_response
 
                 response = provider.create_chat_completion(prompt_request)
@@ -138,7 +152,8 @@ class TestAnthropicProviderCompletion:
                 provider = AnthropicProvider(model_config=model_config)
 
                 json_response = {"answer": "Test"}
-                mock_response = create_mock_response(json.dumps(json_response))
+                # Use prefill-style response (without leading "{")
+                mock_response = create_mock_response(json_without_leading_brace(json_response))
                 mock_client.messages.create.return_value = mock_response
 
                 provider.create_chat_completion(prompt_request)
@@ -146,7 +161,11 @@ class TestAnthropicProviderCompletion:
                 call_kwargs = mock_client.messages.create.call_args.kwargs
                 assert call_kwargs["model"] == "claude-3-5-sonnet-20241022"
                 assert call_kwargs["system"] == "You are a helpful assistant."
-                assert call_kwargs["messages"] == [{"role": "user", "content": "What is 2+2?"}]
+                # Messages now include prefill assistant message
+                assert call_kwargs["messages"] == [
+                    {"role": "user", "content": "What is 2+2?"},
+                    {"role": "assistant", "content": "{"},
+                ]
                 assert call_kwargs["temperature"] == 0.2
                 assert call_kwargs["max_tokens"] == 2048
                 assert call_kwargs["timeout"] == 60
@@ -218,13 +237,15 @@ class TestAnthropicProviderParsing:
                 mock_anthropic.return_value = mock_client
 
                 provider = AnthropicProvider(model_config=model_config)
+                # Response without valid JSON structure
                 mock_response = create_mock_response("This is not JSON")
                 mock_client.messages.create.return_value = mock_response
 
                 with pytest.raises(ParseError) as exc_info:
                     provider.create_chat_completion(prompt_request)
                 assert "Invalid JSON" in str(exc_info.value)
-                assert exc_info.value.raw_output == "This is not JSON"
+                # raw_output now includes the prefill "{"
+                assert exc_info.value.raw_output == "{This is not JSON"
 
     def test_empty_content(self, model_config, prompt_request):
         """Test handling of empty content response."""
@@ -251,7 +272,8 @@ class TestAnthropicProviderParsing:
 
                 provider = AnthropicProvider(model_config=model_config)
                 json_response = {"approve": True, "critical": False}
-                mock_response = create_mock_response(json.dumps(json_response))
+                # Use prefill-style response (without leading "{")
+                mock_response = create_mock_response(json_without_leading_brace(json_response))
                 mock_client.messages.create.return_value = mock_response
 
                 response = provider.create_chat_completion(prompt_request)

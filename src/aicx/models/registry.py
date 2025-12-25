@@ -10,9 +10,10 @@ from aicx.types import PromptRequest, Response
 # Model alias table: friendly names -> provider model IDs
 MODEL_ALIASES: dict[str, str] = {
     "gpt-4o": "gpt-4o",
-    "claude-3-5": "claude-3-5-sonnet-20241022",
+    "claude-3-5": "claude-sonnet-4-20250514",
     "gemini-1.5-pro": "gemini-1.5-pro",
     "gemini-1.5-flash": "gemini-1.5-flash",
+    "gemini-2": "gemini-2.0-flash-exp",
 }
 
 

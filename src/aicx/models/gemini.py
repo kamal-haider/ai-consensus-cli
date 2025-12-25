@@ -103,9 +103,14 @@ class GeminiProvider:
                 )
 
             # Extract fields from the parsed JSON
+            # Ensure answer is a string (serialize if it's a list/dict)
+            answer = parsed.get("answer", "")
+            if not isinstance(answer, str):
+                answer = json.dumps(answer, indent=2)
+
             return Response(
                 model_name=self.model_config.name,
-                answer=parsed.get("answer", ""),
+                answer=answer,
                 approve=parsed.get("approve"),
                 critical=parsed.get("critical"),
                 objections=tuple(parsed.get("objections", [])),
