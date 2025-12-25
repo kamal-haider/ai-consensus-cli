@@ -6,30 +6,42 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
-### Phase 5 Complete - Integration Testing + Packaging
+### Provider Wiring Complete - Real Providers Connected to Runner
 
 **Implemented:**
 
-1. **Integration Tests (`tests/test_integration.py`)** - 27 tests:
-   - `TestConsensusHappyPath` (5 tests) - Full consensus loop
-   - `TestConsensusWithOptions` (3 tests) - Config variations
-   - `TestCLIParser` (9 tests) - Argument parsing
-   - `TestCLIVersion` (1 test) - Version verification
-   - `TestConfigIntegration` (4 tests) - Config loading
-   - `TestMockProviderIntegration` (3 tests) - Mock providers
-   - `TestEndToEnd` (2 tests) - CLI via subprocess
+1. **Provider Factory (`src/aicx/models/factory.py`)**:
+   - `create_provider(ModelConfig)` - Instantiates OpenAI, Anthropic, Gemini, or Mock providers
+   - `create_providers(configs)` - Creates providers for multiple models
+   - `get_available_providers()` - Lists registered providers
+   - Automatic retry wrapping when ModelConfig has retry config
 
-2. **Packaging Updates (`pyproject.toml`)**:
-   - Python 3.10+ support (was 3.11+)
-   - Added `tomli>=2.0,<3.0; python_version < '3.11'`
-   - Updated status to "Alpha"
-   - Added Python 3.10 classifier
+2. **Runner Updates (`src/aicx/consensus/runner.py`)**:
+   - Added helper functions: `_format_digest()`, `_format_responses_for_mediator()`, `_format_critiques_for_mediator()`
+   - Replaced all 4 stub functions with real implementations:
+     - `_collect_round1_responses()` - Calls participants with `participant_prompt()`
+     - `_synthesize_candidate()` - Calls mediator with `mediator_synthesis_prompt()`
+     - `_collect_critique_responses()` - Calls participants with `critique_prompt()`
+     - `_update_candidate()` - Calls mediator with `mediator_update_prompt()`
+   - Providers created once at start and reused throughout consensus loop
 
-**All 418 tests pass (391 unit + 27 integration).**
+3. **Test Fixture Updates (`tests/test_runner.py`)**:
+   - Changed fixtures from real provider names to `mock` provider
+   - Ensures unit tests work without API keys
+
+**All 418 tests pass.**
+
+**CLI is now fully functional:**
+- With API keys set: Uses real OpenAI, Anthropic, Gemini providers
+- Without API keys: Tests use mock providers
 
 ---
 
 ## Previous
+
+### Phase 5 Complete - Integration Testing + Packaging
+
+Integration tests (27 tests), Python 3.10+ support, tomli dependency.
 
 ### Phase 4 Complete - UX + Docs Polish
 
@@ -45,16 +57,21 @@ Quorum handling, context budget, retry policy.
 
 ---
 
-## Project Complete
+## Project Status
 
-All 5 phases implemented:
+All 5 phases + provider wiring implemented:
 - Phase 0: Foundations
 - Phase 1: Core Implementation
 - Phase 2: Provider Adapters
 - Phase 3: Robustness + Limits
 - Phase 4: UX + Docs Polish
 - Phase 5: Integration Testing + Packaging
+- Post-Phase: Provider wiring (stubs replaced with real calls)
 
-**All changes on main branch.** GPT can pull to sync.
+**Uncommitted changes:**
+- `src/aicx/models/factory.py` (new)
+- `src/aicx/models/__init__.py` (factory exports)
+- `src/aicx/consensus/runner.py` (real provider calls)
+- `tests/test_runner.py` (mock provider fixtures)
 
-Ready for real-world testing with actual API keys.
+Ready for commit and real-world testing with API keys.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from aicx.consensus.digest import build_digest, update_digest_from_critiques
@@ -11,12 +12,25 @@ from aicx.context.budget import ContextBudget, track_usage, would_exceed_budget
 from aicx.context.tokens import count_response_tokens
 from aicx.context.truncation import truncate_oldest_rounds
 from aicx.logging import log_event
+from aicx.models.factory import create_provider
+from aicx.models.registry import ProviderAdapter
+from aicx.prompts.templates import (
+    critique_prompt,
+    mediator_synthesis_prompt,
+    mediator_update_prompt,
+    participant_prompt,
+)
 from aicx.types import (
     ConsensusResult,
     Digest,
     ExitCode,
     MediatorState,
+    ModelConfig,
+    ParseError,
+    PromptRequest,
+    ProviderError,
     Response,
+    Role,
     RunConfig,
 )
 
@@ -27,6 +41,96 @@ class ConsensusContext:
 
     prompt: str
     config: RunConfig
+
+
+def _format_digest(digest: Digest) -> str:
+    """Format a digest as a string for prompts.
+
+    Args:
+        digest: Digest to format.
+
+    Returns:
+        Formatted string representation.
+    """
+    lines = []
+
+    if digest.common_points:
+        lines.append("Common points:")
+        for point in digest.common_points:
+            lines.append(f"  - {point}")
+
+    if digest.objections:
+        lines.append("Objections:")
+        for obj in digest.objections:
+            lines.append(f"  - {obj}")
+
+    if digest.missing:
+        lines.append("Missing:")
+        for item in digest.missing:
+            lines.append(f"  - {item}")
+
+    if digest.suggested_edits:
+        lines.append("Suggested edits:")
+        for edit in digest.suggested_edits:
+            lines.append(f"  - {edit}")
+
+    return "\n".join(lines) if lines else "(No digest available)"
+
+
+def _format_responses_for_mediator(responses: list[Response]) -> str:
+    """Format participant responses for mediator synthesis.
+
+    Args:
+        responses: List of participant responses.
+
+    Returns:
+        Formatted string with all answers.
+    """
+    lines = []
+    for i, response in enumerate(responses, 1):
+        lines.append(f"Participant {i} ({response.model_name}):")
+        lines.append(response.answer)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _format_critiques_for_mediator(critiques: list[Response]) -> str:
+    """Format critique responses for mediator update.
+
+    Args:
+        critiques: List of critique responses.
+
+    Returns:
+        Formatted string with all critiques.
+    """
+    lines = []
+    for critique in critiques:
+        lines.append(f"Critique from {critique.model_name}:")
+        lines.append(f"  Approve: {critique.approve}")
+        lines.append(f"  Critical: {critique.critical}")
+        if critique.objections:
+            lines.append(f"  Objections: {', '.join(critique.objections)}")
+        if critique.missing:
+            lines.append(f"  Missing: {', '.join(critique.missing)}")
+        if critique.edits:
+            lines.append(f"  Suggested edits: {', '.join(critique.edits)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _create_providers_for_config(config: RunConfig) -> dict[str, ProviderAdapter]:
+    """Create providers for all models in config.
+
+    Args:
+        config: Run configuration.
+
+    Returns:
+        Dictionary mapping model names to providers.
+    """
+    providers = {}
+    for model in config.models:
+        providers[model.name] = create_provider(model)
+    return providers
 
 
 def run_consensus(
@@ -59,10 +163,14 @@ def run_consensus(
         budget = ContextBudget(max_tokens=config.max_context_tokens)
         log_event("budget_initialized", payload={"max_tokens": config.max_context_tokens})
 
+    # Create providers once for reuse
+    providers = _create_providers_for_config(config)
+    mediator_provider = create_provider(config.mediator)
+
     # Phase 1: Collect independent answers (Round 1)
-    # NOTE: This is a stub until provider adapters are implemented
-    # In the real implementation, this would call participant models
-    participant_responses, failed_models_r1 = _collect_round1_responses(prompt, config)
+    participant_responses, failed_models_r1 = _collect_round1_responses(
+        prompt, config, providers
+    )
 
     # Check quorum (raises ZeroResponseError or QuorumError if not met)
     check_round_responses(participant_responses, config, round_index=1)
@@ -80,9 +188,10 @@ def run_consensus(
         })
 
     # Phase 2: Mediator synthesizes candidate answer and builds digest
-    # NOTE: This is a stub until mediator provider is implemented
     digest = build_digest(participant_responses)
-    mediator_state = _synthesize_candidate(prompt, participant_responses, digest, config)
+    mediator_state = _synthesize_candidate(
+        prompt, participant_responses, digest, config, mediator_provider
+    )
 
     log_event("synthesis_completed", payload={"candidate_length": len(mediator_state.candidate_answer)})
 
@@ -121,13 +230,13 @@ def run_consensus(
                     })
 
         # Collect critiques from participants
-        # NOTE: This is a stub until provider adapters are implemented
         critiques, failed_models_critique = _collect_critique_responses(
             prompt,
             mediator_state.candidate_answer,
             digest,
             config,
             current_round,
+            providers,
         )
 
         # Check quorum for critique round
@@ -191,6 +300,7 @@ def run_consensus(
             critiques,
             digest,
             config,
+            mediator_provider,
         )
 
         # Update mediator state with current approval metrics
@@ -238,42 +348,64 @@ def run_consensus(
 
 
 def _collect_round1_responses(
-    prompt: str, config: RunConfig
+    prompt: str,
+    config: RunConfig,
+    providers: dict[str, ProviderAdapter] | None = None,
 ) -> tuple[list[Response], tuple[str, ...]]:
     """
     Collect independent answers from all participants (Round 1).
 
-    NOTE: This is a stub until provider adapters are implemented.
-    In the real implementation, this would:
-    1. Sort participants by name for determinism
-    2. Call each participant model with the prompt
-    3. Parse JSON responses into Response objects
-    4. Handle failures and check quorum
-
     Args:
         prompt: User prompt
         config: Run configuration
+        providers: Optional pre-created providers (uses factory if not provided)
 
     Returns:
         Tuple of (successful_responses, failed_model_names)
     """
-    # Stub: Return empty list for now
-    # Real implementation will call provider adapters
-    log_event("round1_stub", payload={"participants": len(config.models)})
+    log_event("round1_started", payload={"participants": len(config.models)})
+
+    # Create providers if not provided
+    if providers is None:
+        providers = _create_providers_for_config(config)
 
     # Sort models by name for deterministic ordering
     sorted_models = sorted(config.models, key=lambda m: m.name)
 
-    # Placeholder responses
     responses = []
-    for model in sorted_models:
-        response = Response(
-            model_name=model.name,
-            answer=f"[Stub answer from {model.name}]",
-        )
-        responses.append(response)
+    failed_models = []
 
-    return responses, ()
+    for model in sorted_models:
+        provider = providers.get(model.name)
+        if provider is None:
+            log_event("provider_missing", payload={"model": model.name})
+            failed_models.append(model.name)
+            continue
+
+        # Build the prompt
+        template = participant_prompt(prompt)
+        request = PromptRequest(
+            user_prompt=template.user,
+            system_prompt=template.system,
+            round_index=0,
+            role=Role.PARTICIPANT,
+        )
+
+        try:
+            response = provider.create_chat_completion(request)
+            responses.append(response)
+            log_event("response_received", payload={
+                "model": model.name,
+                "answer_length": len(response.answer),
+            })
+        except (ProviderError, ParseError) as e:
+            log_event("response_failed", payload={
+                "model": model.name,
+                "error": str(e),
+            })
+            failed_models.append(model.name)
+
+    return responses, tuple(failed_models)
 
 
 def _synthesize_candidate(
@@ -281,35 +413,70 @@ def _synthesize_candidate(
     responses: list[Response],
     digest: Digest,
     config: RunConfig,
+    mediator_provider: ProviderAdapter | None = None,
 ) -> MediatorState:
     """
     Mediator synthesizes candidate answer from participant responses.
-
-    NOTE: This is a stub until mediator provider is implemented.
-    In the real implementation, this would:
-    1. Call mediator model with all participant answers
-    2. Parse JSON response into MediatorState
-    3. Handle failures
 
     Args:
         prompt: User prompt
         responses: Participant responses
         digest: Digest of responses
         config: Run configuration
+        mediator_provider: Optional pre-created mediator provider
 
     Returns:
         MediatorState with candidate answer and rationale
     """
-    # Stub: Return placeholder state
-    log_event("synthesis_stub", payload={"responses": len(responses)})
+    log_event("synthesis_started", payload={"responses": len(responses)})
 
-    return MediatorState(
-        candidate_answer="[Stub candidate answer from mediator]",
-        rationale="Synthesized from participant responses",
-        approval_count=0,
-        critical_objections=(),
-        disagreement_summary=None,
+    # Create mediator provider if not provided
+    if mediator_provider is None:
+        mediator_provider = create_provider(config.mediator)
+
+    # Format responses for the mediator
+    inputs = _format_responses_for_mediator(responses)
+
+    # Build the prompt
+    template = mediator_synthesis_prompt(inputs)
+    request = PromptRequest(
+        user_prompt=template.user,
+        system_prompt=template.system,
+        round_index=0,
+        role=Role.MEDIATOR,
     )
+
+    try:
+        response = mediator_provider.create_chat_completion(request)
+
+        # Parse the mediator response - it should contain candidate_answer and rationale
+        # The response.answer contains the raw JSON, we need to parse it
+        raw = response.raw or response.answer
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # Fallback: use the answer field directly
+            parsed = {"candidate_answer": response.answer, "rationale": ""}
+
+        candidate_answer = parsed.get("candidate_answer", response.answer)
+        rationale = parsed.get("rationale", "")
+
+        log_event("synthesis_completed", payload={
+            "candidate_length": len(candidate_answer),
+        })
+
+        return MediatorState(
+            candidate_answer=candidate_answer,
+            rationale=rationale,
+            approval_count=0,
+            critical_objections=(),
+            disagreement_summary=None,
+        )
+
+    except (ProviderError, ParseError) as e:
+        # Mediator failure is critical - re-raise
+        log_event("synthesis_failed", payload={"error": str(e)})
+        raise
 
 
 def _collect_critique_responses(
@@ -318,16 +485,10 @@ def _collect_critique_responses(
     digest: Digest,
     config: RunConfig,
     round_index: int,
+    providers: dict[str, ProviderAdapter] | None = None,
 ) -> tuple[list[Response], tuple[str, ...]]:
     """
     Collect critique responses from participants (Round 2+).
-
-    NOTE: This is a stub until provider adapters are implemented.
-    In the real implementation, this would:
-    1. Sort participants by name for determinism
-    2. Call each participant model with candidate and digest
-    3. Parse JSON responses into Response objects with critique fields
-    4. Handle failures and check quorum
 
     Args:
         prompt: Original user prompt
@@ -335,31 +496,63 @@ def _collect_critique_responses(
         digest: Current digest
         config: Run configuration
         round_index: Current round number
+        providers: Optional pre-created providers
 
     Returns:
         Tuple of (successful_critiques, failed_model_names)
     """
-    # Stub: Return empty list for now
-    log_event("critique_stub", payload={"participants": len(config.models)})
+    log_event("critique_started", payload={
+        "round": round_index,
+        "participants": len(config.models),
+    })
+
+    # Create providers if not provided
+    if providers is None:
+        providers = _create_providers_for_config(config)
 
     # Sort models by name for deterministic ordering
     sorted_models = sorted(config.models, key=lambda m: m.name)
 
-    # Placeholder critiques
     critiques = []
-    for model in sorted_models:
-        critique = Response(
-            model_name=model.name,
-            answer="",  # No new answer in critique
-            approve=True,  # Stub: all approve
-            critical=False,
-            objections=(),
-            missing=(),
-            edits=(),
-        )
-        critiques.append(critique)
+    failed_models = []
 
-    return critiques, ()
+    # Format the digest
+    digest_str = _format_digest(digest)
+
+    for model in sorted_models:
+        provider = providers.get(model.name)
+        if provider is None:
+            log_event("provider_missing", payload={"model": model.name})
+            failed_models.append(model.name)
+            continue
+
+        # Build the critique prompt
+        template = critique_prompt(candidate_answer, digest_str)
+        request = PromptRequest(
+            user_prompt=template.user,
+            system_prompt=template.system,
+            round_index=round_index,
+            role=Role.PARTICIPANT,
+            candidate_answer=candidate_answer,
+            input_digest=digest,
+        )
+
+        try:
+            response = provider.create_chat_completion(request)
+            critiques.append(response)
+            log_event("critique_received", payload={
+                "model": model.name,
+                "approve": response.approve,
+                "critical": response.critical,
+            })
+        except (ProviderError, ParseError) as e:
+            log_event("critique_failed", payload={
+                "model": model.name,
+                "error": str(e),
+            })
+            failed_models.append(model.name)
+
+    return critiques, tuple(failed_models)
 
 
 def _update_candidate(
@@ -367,35 +560,70 @@ def _update_candidate(
     critiques: list[Response],
     digest: Digest,
     config: RunConfig,
+    mediator_provider: ProviderAdapter | None = None,
 ) -> MediatorState:
     """
     Mediator updates candidate based on critiques.
-
-    NOTE: This is a stub until mediator provider is implemented.
-    In the real implementation, this would:
-    1. Call mediator model with critiques and digest
-    2. Parse JSON response into updated MediatorState
-    3. Handle failures
 
     Args:
         previous_candidate: Previous candidate answer
         critiques: Critique responses from participants
         digest: Current digest
         config: Run configuration
+        mediator_provider: Optional pre-created mediator provider
 
     Returns:
         Updated MediatorState
     """
-    # Stub: Return same candidate for now
-    log_event("update_stub", payload={"critiques": len(critiques)})
+    log_event("update_started", payload={"critiques": len(critiques)})
 
-    return MediatorState(
-        candidate_answer=previous_candidate,  # No changes in stub
-        rationale="Updated based on critiques",
-        approval_count=0,
-        critical_objections=(),
-        disagreement_summary=None,
+    # Create mediator provider if not provided
+    if mediator_provider is None:
+        mediator_provider = create_provider(config.mediator)
+
+    # Format critiques for the mediator
+    critiques_str = _format_critiques_for_mediator(critiques)
+
+    # Build the prompt
+    template = mediator_update_prompt(previous_candidate, critiques_str)
+    request = PromptRequest(
+        user_prompt=template.user,
+        system_prompt=template.system,
+        round_index=1,  # Update is always after round 1
+        role=Role.MEDIATOR,
+        candidate_answer=previous_candidate,
     )
+
+    try:
+        response = mediator_provider.create_chat_completion(request)
+
+        # Parse the mediator response
+        raw = response.raw or response.answer
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # Fallback: use the answer field directly
+            parsed = {"candidate_answer": response.answer, "rationale": ""}
+
+        candidate_answer = parsed.get("candidate_answer", response.answer)
+        rationale = parsed.get("rationale", "")
+
+        log_event("update_completed", payload={
+            "candidate_length": len(candidate_answer),
+        })
+
+        return MediatorState(
+            candidate_answer=candidate_answer,
+            rationale=rationale,
+            approval_count=0,
+            critical_objections=(),
+            disagreement_summary=None,
+        )
+
+    except (ProviderError, ParseError) as e:
+        # Mediator failure is critical - re-raise
+        log_event("update_failed", payload={"error": str(e)})
+        raise
 
 
 def _analyze_critiques(critiques: list[Response]) -> tuple[int, tuple[str, ...]]:

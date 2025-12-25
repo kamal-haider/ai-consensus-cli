@@ -1,14 +1,11 @@
 """Tests for consensus runner orchestration.
 
-NOTE: The current implementation uses stub provider calls that always return
-successful responses. This means some error conditions (like QuorumError from
-insufficient responses) cannot be tested until real provider adapters are
-implemented. These tests focus on:
+Tests focus on:
 - Basic orchestration flow and round tracking
 - Helper function logic (_analyze_critiques, _build_disagreement_summary)
 - Result structure and metadata population
 - Configuration options (max_rounds, share_mode, etc.)
-- Deterministic behavior with stub data
+- Deterministic behavior with mock providers
 """
 
 from __future__ import annotations
@@ -39,8 +36,8 @@ def model_a():
     """Create a test model configuration A."""
     return ModelConfig(
         name="model-a",
-        provider="openai",
-        model_id="gpt-4",
+        provider="mock",
+        model_id="mock-a",
         temperature=0.2,
     )
 
@@ -50,8 +47,8 @@ def model_b():
     """Create a test model configuration B."""
     return ModelConfig(
         name="model-b",
-        provider="anthropic",
-        model_id="claude-3",
+        provider="mock",
+        model_id="mock-b",
         temperature=0.2,
     )
 
@@ -61,8 +58,8 @@ def model_c():
     """Create a test model configuration C."""
     return ModelConfig(
         name="model-c",
-        provider="openai",
-        model_id="gpt-3.5",
+        provider="mock",
+        model_id="mock-c",
         temperature=0.2,
     )
 
@@ -72,8 +69,8 @@ def mediator():
     """Create a mediator model configuration."""
     return ModelConfig(
         name="mediator",
-        provider="openai",
-        model_id="gpt-4o",
+        provider="mock",
+        model_id="mock-med",
         temperature=0.2,
     )
 

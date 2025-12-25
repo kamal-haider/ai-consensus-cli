@@ -6,6 +6,11 @@ from aicx.models.errors import (
     map_network_error,
     map_parse_error,
 )
+from aicx.models.factory import (
+    create_provider,
+    create_providers,
+    get_available_providers,
+)
 from aicx.models.mock import (
     MockProvider,
     create_approving_provider,
@@ -26,6 +31,10 @@ __all__ = [
     "ProviderRegistry",
     "default_registry",
     "MODEL_ALIASES",
+    # Factory
+    "create_provider",
+    "create_providers",
+    "get_available_providers",
     # Mock providers
     "MockProvider",
     "create_mock_provider",
