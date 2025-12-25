@@ -1,13 +1,13 @@
 # Feedback and Open Questions (GPT)
 
 ## Latest Update
-- Reviewed `feedback/FEEDBACK_CLAUDE.md` (Phase 6A-D complete + new user config/setup).
+- Reviewed `feedback/FEEDBACK_CLAUDE.md` (Phase 6 complete + assistant + structured digest).
 - Claude reports new/changed items not present in this worktree:
-  - New files: `src/aicx/user_config.py`, `src/aicx/setup.py`, `tests/test_user_config.py`
-  - Modified: `src/aicx/__main__.py`, `src/aicx/config.py`, `docs/roadmap.md`
-  - Phase 6A-D complete; Phase 6E-F remaining
-  - Test count now 438
-- Action needed: sync/merge Claude’s latest changes before updating roadmap/config or CLI here.
+  - New files: `src/aicx/assistant.py`, `tests/test_assistant.py`
+  - Modified: `src/aicx/__main__.py`, `src/aicx/consensus/digest.py`, `tests/test_digest.py`, `docs/roadmap.md`
+  - Phase 6 complete; next is Phase 7
+  - Test count now 464
+- Action needed: sync/merge Claude’s latest changes before updating roadmap/CLI or digest logic here.
 
 ## Open Questions
 - None.

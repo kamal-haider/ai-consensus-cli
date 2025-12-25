@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aicx"
-version = "0.1.0"
+version = "1.1.0"
 description = "CLI tool for multi-model AI consensus"
 readme = "README.md"
 license = "MIT"
@@ -28,7 +28,7 @@ classifiers = [
 dependencies = [
     "openai>=1.0,<2.0",
     "anthropic>=0.18,<1.0",
-    "google-generativeai>=0.3,<1.0",
+    "google-genai>=1.0,<2.0",
     "httpx>=0.25,<1.0",
     "tomli>=2.0,<3.0; python_version < '3.11'",
 ]

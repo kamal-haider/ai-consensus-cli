@@ -6,7 +6,8 @@ import json
 import os
 from dataclasses import dataclass
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from aicx.models.errors import map_api_error, map_network_error, map_parse_error
 from aicx.types import ModelConfig, ParseError, PromptRequest, ProviderError, Response
@@ -23,6 +24,18 @@ class GeminiProvider:
     name: str = "gemini"
     supports_json: bool = True
     model_config: ModelConfig | None = None
+    _client: genai.Client | None = None
+
+    def __post_init__(self) -> None:
+        """Initialize the Gemini client."""
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise ProviderError(
+                "GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set",
+                provider=self.name,
+                code="auth",
+            )
+        self._client = genai.Client(api_key=api_key)
 
     def create_chat_completion(self, request: PromptRequest) -> Response:
         """Send a chat completion request to Gemini.
@@ -37,17 +50,12 @@ class GeminiProvider:
             ProviderError: On network/timeout/API errors or missing API key.
             ParseError: On malformed JSON output.
         """
-        # Get API key from environment
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        if self._client is None:
             raise ProviderError(
-                "GEMINI_API_KEY environment variable not set",
+                "Gemini client not initialized",
                 provider=self.name,
-                code="auth",
+                code="config",
             )
-
-        # Configure the Gemini client
-        genai.configure(api_key=api_key)
 
         # Get model configuration
         if self.model_config is None:
@@ -63,25 +71,16 @@ class GeminiProvider:
         timeout_seconds = self.model_config.timeout_seconds
 
         try:
-            # Create the generative model with JSON mode
-            model = genai.GenerativeModel(
-                model_name=model_id,
-                generation_config=genai.GenerationConfig(
+            # Generate content with JSON mode
+            response = self._client.models.generate_content(
+                model=model_id,
+                contents=request.user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=request.system_prompt,
                     temperature=temperature,
                     max_output_tokens=max_tokens,
                     response_mime_type="application/json",
                 ),
-            )
-
-            # Combine system and user prompts
-            # Gemini doesn't have a separate system message in the same way,
-            # so we prepend the system prompt to the user prompt
-            combined_prompt = f"{request.system_prompt}\n\n{request.user_prompt}"
-
-            # Generate content with timeout
-            response = model.generate_content(
-                combined_prompt,
-                request_options={"timeout": timeout_seconds},
             )
 
             # Extract the text response
