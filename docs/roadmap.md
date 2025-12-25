@@ -123,7 +123,7 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
 
 **Test count: 418 tests (391 unit + 27 integration)**
 
-## Phase 6: Configuration UX + Interactive Help (In Progress)
+## Phase 6: Configuration UX + Interactive Help ✅ COMPLETE
 
 ### A) Interactive Setup Guide ✅
 - [x] `--setup` flag launches interactive configuration wizard
@@ -152,20 +152,19 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
   - Config file locations being used
   - Available model aliases
 
-### E) Interactive Help Assistant
-- [ ] `--help "question"` invokes AI assistant for CLI questions
-- [ ] Uses mediator model to answer questions about CLI usage
-- [ ] Scoped to CLI-related questions only (not general knowledge)
-- [ ] Can suggest commands or offer to run them
-- [ ] Example: `--help "How do I configure a new model?"` → explains or runs `--setup`
-- [ ] Distinguishes from `--help` (no argument) which shows traditional help menu
-- [ ] Response should be concise and actionable
+### E) Interactive Help Assistant ✅
+- [x] `--ask "question"` invokes AI assistant for CLI questions
+- [x] Uses available provider (prefers user's mediator, falls back to any)
+- [x] Scoped to CLI-related questions only (not general knowledge)
+- [x] Can suggest commands like `--setup`
+- [x] Example: `--ask "How do I configure a new model?"` → explains setup process
+- [x] Response is concise and actionable
 
-### F) Digest Improvements for Structured Data
-- [ ] Detect JSON/structured data in responses
-- [ ] Skip sentence-based digest for structured data
-- [ ] Generate prose summary for JSON responses (optional)
-- [ ] Reduce false "digest format" objections from models
+### F) Digest Improvements for Structured Data ✅
+- [x] Detect JSON/structured data in responses (JSON, code blocks, etc.)
+- [x] Skip sentence-based digest extraction for structured data
+- [x] Detect code patterns (functions, classes, imports, HTML)
+- [x] Detect high special-character ratio as indicator of code
 
 ## Phase 7: Future Enhancements (Ideas)
 - [ ] Parallel model calls (concurrent API requests)

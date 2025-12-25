@@ -34,6 +34,9 @@ Examples:
   aicx --status
       Show current configuration and API key status
 
+  aicx --ask "How do I configure a new model?"
+      Get quick help about the CLI
+
 Exit Codes:
   0  Success (consensus reached or best-effort answer)
   1  Configuration error (invalid config file or flags)
@@ -78,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--status",
         action="store_true",
         help="Show current configuration and API key status",
+    )
+    setup_group.add_argument(
+        "--ask",
+        metavar="QUESTION",
+        help="Ask a question about how to use the CLI",
     )
 
     # Model selection
@@ -191,6 +199,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         from aicx.setup import run_status
 
         return run_status()
+
+    # Handle ask command
+    if args.ask:
+        from aicx.assistant import run_help_assistant
+
+        return run_help_assistant(args.ask)
 
     # Require prompt for normal operation
     if not args.prompt:

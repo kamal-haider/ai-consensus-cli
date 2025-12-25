@@ -2,10 +2,58 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections import Counter
 from typing import Sequence
 
 from aicx.types import Digest, Response
+
+
+def is_structured_data(text: str) -> bool:
+    """Check if text appears to be structured data (JSON, code, etc.).
+
+    Args:
+        text: The text to check.
+
+    Returns:
+        True if the text appears to be structured data.
+    """
+    text = text.strip()
+
+    # Check for JSON array or object
+    if (text.startswith("[") and text.endswith("]")) or (
+        text.startswith("{") and text.endswith("}")
+    ):
+        try:
+            json.loads(text)
+            return True
+        except json.JSONDecodeError:
+            pass
+
+    # Check for code-like patterns
+    code_patterns = [
+        r"^```",  # Markdown code block
+        r"^\s*def\s+\w+\s*\(",  # Python function
+        r"^\s*class\s+\w+",  # Python class
+        r"^\s*function\s+\w+\s*\(",  # JavaScript function
+        r"^\s*const\s+\w+\s*=",  # JavaScript const
+        r"^\s*import\s+",  # Import statement
+        r"^\s*from\s+\w+\s+import",  # Python import
+        r"<\w+[^>]*>",  # HTML/XML tag
+    ]
+
+    for pattern in code_patterns:
+        if re.search(pattern, text, re.MULTILINE):
+            return True
+
+    # Check if mostly non-prose (high ratio of special characters)
+    if len(text) > 20:
+        special_chars = sum(1 for c in text if c in "{}[]()<>;:=,\"'`")
+        if special_chars / len(text) > 0.15:
+            return True
+
+    return False
 
 
 def build_digest(responses: Sequence[Response]) -> Digest:
@@ -71,6 +119,9 @@ def _extract_common_points(responses: Sequence[Response]) -> list[str]:
     Uses simple sentence splitting and finds sentences that appear
     in multiple answers (at least 50% of responses).
 
+    For structured data (JSON, code), skips sentence extraction and
+    returns an empty list to avoid false positives.
+
     Args:
         responses: Sequence of Response objects
 
@@ -80,9 +131,12 @@ def _extract_common_points(responses: Sequence[Response]) -> list[str]:
     if not responses:
         return []
 
-    # Extract sentences from all answers
+    # Extract sentences from all answers (skip structured data)
     all_sentences: list[str] = []
     for response in responses:
+        # Skip structured data - sentence extraction doesn't work well
+        if is_structured_data(response.answer):
+            continue
         sentences = _split_into_sentences(response.answer)
         all_sentences.extend(sentences)
 

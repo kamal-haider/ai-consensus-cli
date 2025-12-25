@@ -6,50 +6,31 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
-### Phase 6A-D Complete - Setup Wizard & Configuration UX
+### Phase 6 Complete - Configuration UX + Interactive Help
 
-Implemented and tested:
+All Phase 6 features implemented and tested:
 
 **A) Interactive Setup Guide (`--setup`)** ✅
-- Interactive wizard to configure default models and mediator
-- Saves to user config (`~/.config/aicx/config.toml`)
-- Validates API keys for selected providers
-- Shows available models per provider
-
 **B) Default Model Behavior** ✅
-- `aicx "prompt"` without `--models` uses configured defaults
-- Fallback chain: CLI flags → user config → project config → built-in defaults
-- Ad-hoc model resolution from model ID prefixes (gpt-*, claude-*, gemini-*)
-
 **C) Model Shorthand Aliases** ✅
-- `--models gpt claude gemini` expands to full model names
-- Maps to user's configured default version for each provider
-- Allows mixing shorthand and full names
-
 **D) Status Command (`--status`)** ✅
-- Shows default models, mediator, API key status
-- Lists config file locations and available aliases
+**E) Interactive Help Assistant (`--ask`)** ✅
+**F) Digest Improvements for Structured Data** ✅
 
-### Remaining Phase 6 Work
-
-**E) Interactive Help Assistant (`--help "question"`)**
-- AI-powered help for CLI questions
-- Uses mediator model, scoped to CLI topics only
-- Can suggest or run commands
-
-**F) Digest Improvements for Structured Data**
-- Detect JSON responses and skip sentence-based digest
-- Reduces false "digest format" objections from models
+New in Phase 6E-F:
+- `--ask "question"` for quick CLI help (uses available AI provider)
+- Structured data detection in digest (JSON, code blocks, functions, classes)
+- Skips sentence-based digest extraction for structured data
 
 ---
 
 ## Previous
 
+### Phase 6A-D Complete - Setup Wizard & Configuration UX
+
 ### v1.0 Released
 
-Tagged and released on GitHub with full consensus protocol, all 3 providers, and 438 tests.
-
-### Phase 6 Planned - Configuration UX + Interactive Help
+Tagged and released on GitHub with full consensus protocol, all 3 providers.
 
 ### Phase 5 Complete - Integration Testing + Packaging
 
@@ -65,17 +46,17 @@ Tagged and released on GitHub with full consensus protocol, all 3 providers, and
 
 ## Project Status
 
-**Completed:** Phases 0-5 + v1.0 release + Phase 6A-D (setup wizard)
-**In Progress:** Phase 6E-F (interactive help, digest improvements)
+**Completed:** Phases 0-6 complete
+**Next:** Phase 7 (Future Enhancements - parallel calls, streaming, local models)
 
-**New files:**
-- `src/aicx/user_config.py` - User config management
-- `src/aicx/setup.py` - Interactive setup wizard
-- `tests/test_user_config.py` - User config tests (20 tests)
+**New files in Phase 6E-F:**
+- `src/aicx/assistant.py` - Interactive help assistant
+- `tests/test_assistant.py` - Assistant tests (12 tests)
 
 **Modified files:**
-- `src/aicx/__main__.py` - Added --setup, --status flags
-- `src/aicx/config.py` - Added user prefs and shorthand expansion
-- `docs/roadmap.md` - Phase 6A-D marked complete
+- `src/aicx/__main__.py` - Added --ask flag
+- `src/aicx/consensus/digest.py` - Added is_structured_data()
+- `tests/test_digest.py` - Added structured data tests (14 tests)
+- `docs/roadmap.md` - Phase 6 marked complete
 
-**All 438 tests pass.**
+**All 464 tests pass.**

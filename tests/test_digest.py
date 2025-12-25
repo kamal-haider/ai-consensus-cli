@@ -6,12 +6,87 @@ import pytest
 
 from aicx.consensus.digest import (
     build_digest,
+    is_structured_data,
     update_digest_from_critiques,
     _extract_common_points,
     _split_into_sentences,
     _sort_by_frequency_and_alpha,
 )
 from aicx.types import Digest, Response
+
+
+# Tests for structured data detection
+
+
+def test_is_structured_data_json_object():
+    """Test JSON object detection."""
+    assert is_structured_data('{"name": "test", "value": 123}') is True
+    assert is_structured_data('  {"key": "value"}  ') is True
+
+
+def test_is_structured_data_json_array():
+    """Test JSON array detection."""
+    assert is_structured_data('[1, 2, 3]') is True
+    assert is_structured_data('[{"name": "a"}, {"name": "b"}]') is True
+
+
+def test_is_structured_data_invalid_json():
+    """Test invalid JSON is not detected as structured."""
+    assert is_structured_data('{not valid json}') is False
+    assert is_structured_data('[incomplete') is False
+
+
+def test_is_structured_data_code_blocks():
+    """Test markdown code block detection."""
+    assert is_structured_data('```python\nprint("hello")\n```') is True
+    assert is_structured_data('```\ncode here\n```') is True
+
+
+def test_is_structured_data_python_function():
+    """Test Python function detection."""
+    assert is_structured_data('def hello():\n    print("hi")') is True
+
+
+def test_is_structured_data_python_class():
+    """Test Python class detection."""
+    assert is_structured_data('class MyClass:\n    pass') is True
+
+
+def test_is_structured_data_javascript():
+    """Test JavaScript code detection."""
+    assert is_structured_data('function test() { return 1; }') is True
+    assert is_structured_data('const x = 5;') is True
+
+
+def test_is_structured_data_imports():
+    """Test import statement detection."""
+    assert is_structured_data('import os\nimport sys') is True
+    assert is_structured_data('from typing import List') is True
+
+
+def test_is_structured_data_html():
+    """Test HTML detection."""
+    assert is_structured_data('<div class="test">content</div>') is True
+    assert is_structured_data('<html><body></body></html>') is True
+
+
+def test_is_structured_data_prose():
+    """Test prose is not detected as structured."""
+    assert is_structured_data("This is a normal sentence.") is False
+    assert is_structured_data("The quick brown fox jumps over the lazy dog.") is False
+
+
+def test_is_structured_data_short_text():
+    """Test short text is not detected as structured."""
+    assert is_structured_data("Hello") is False
+    assert is_structured_data("42") is False
+
+
+def test_is_structured_data_high_special_char_ratio():
+    """Test high special character ratio detection."""
+    # Code-like text with many special chars
+    text = "obj.method(arg1, arg2); result = func();"
+    assert is_structured_data(text) is True
 
 
 # Fixtures: Response objects
