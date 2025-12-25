@@ -12,7 +12,7 @@ from aicx.logging import configure_logging
 from aicx.types import ConfigError, ExitCode
 
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 EXAMPLES = """
 Examples:
@@ -185,6 +185,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
+    # Load saved API keys from ~/.config/aicx/.env before anything else
+    from aicx.user_config import load_saved_api_keys
+
+    load_saved_api_keys()
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

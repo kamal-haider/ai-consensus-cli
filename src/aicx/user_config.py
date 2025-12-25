@@ -128,6 +128,100 @@ def save_user_preferences(prefs: UserPreferences) -> None:
     config_path.write_text("\n".join(lines))
 
 
+# Mapping of provider to environment variable name
+API_KEY_VARS: dict[str, str] = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+}
+
+
+def get_env_file_path() -> Path:
+    """Get the path to the saved API keys file."""
+    return get_user_config_dir() / ".env"
+
+
+def load_saved_api_keys() -> None:
+    """Load API keys from saved .env file into environment.
+
+    This should be called early in CLI startup to make saved keys
+    available to providers.
+    """
+    env_path = get_env_file_path()
+    if not env_path.exists():
+        return
+
+    try:
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith("#"):
+                continue
+            # Parse KEY=value format
+            if "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                # Only set if not already in environment (env takes precedence)
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        # If we can't read the file, just continue without saved keys
+        pass
+
+
+def save_api_key(provider: str, api_key: str) -> None:
+    """Save an API key to the .env file.
+
+    Args:
+        provider: Provider name (openai, anthropic, gemini).
+        api_key: The API key value.
+    """
+    var_name = API_KEY_VARS.get(provider.lower())
+    if not var_name:
+        return
+
+    env_path = get_env_file_path()
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing keys
+    existing_keys: dict[str, str] = {}
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                if key:
+                    existing_keys[key] = value
+
+    # Update with new key
+    existing_keys[var_name] = api_key
+
+    # Write back
+    lines = ["# AI Consensus CLI - Saved API Keys", "# Do not share this file", ""]
+    for key, value in sorted(existing_keys.items()):
+        lines.append(f'{key}="{value}"')
+    lines.append("")
+
+    env_path.write_text("\n".join(lines))
+
+    # Also set in current environment
+    os.environ[var_name] = api_key
+
+
 def check_api_key(provider: str) -> bool:
     """Check if API key is set for a provider.
 
@@ -137,12 +231,7 @@ def check_api_key(provider: str) -> bool:
     Returns:
         True if the API key environment variable is set.
     """
-    key_vars = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "gemini": "GEMINI_API_KEY",
-    }
-    var_name = key_vars.get(provider.lower())
+    var_name = API_KEY_VARS.get(provider.lower())
     if not var_name:
         return False
     return bool(os.environ.get(var_name))

@@ -5,12 +5,15 @@ from __future__ import annotations
 import sys
 
 from aicx.user_config import (
+    API_KEY_VARS,
     DEFAULT_PROVIDER_MODELS,
     UserPreferences,
     check_api_key,
     get_api_key_status,
+    get_env_file_path,
     get_user_config_path,
     load_user_preferences,
+    save_api_key,
     save_user_preferences,
 )
 
@@ -49,13 +52,32 @@ def run_setup() -> int:
     print()
 
     if not available_providers:
-        print("No API keys found. Please set at least one of:")
-        print("  - OPENAI_API_KEY")
-        print("  - ANTHROPIC_API_KEY")
-        print("  - GEMINI_API_KEY")
+        print("No API keys found. Let's set them up now.")
         print()
-        print("Then run --setup again.")
-        return 1
+        _setup_api_keys()
+        # Refresh status after setup
+        api_status = get_api_key_status()
+        available_providers = [p for p, has_key in api_status.items() if has_key]
+        if not available_providers:
+            print()
+            print("No API keys configured. Cannot proceed with setup.")
+            return 1
+        print()
+    else:
+        # Offer to configure missing keys
+        missing_providers = [p for p, has_key in api_status.items() if not has_key]
+        if missing_providers:
+            configure_more = _prompt(
+                f"Configure additional providers ({', '.join(missing_providers)})? [y/N]: ",
+                "n",
+            )
+            if configure_more.lower() in ("y", "yes"):
+                print()
+                _setup_api_keys(only_providers=missing_providers)
+                # Refresh status
+                api_status = get_api_key_status()
+                available_providers = [p for p, has_key in api_status.items() if has_key]
+                print()
 
     # Load existing preferences
     existing = load_user_preferences()
@@ -234,14 +256,20 @@ def run_status() -> int:
 
     # User config
     config_path = get_user_config_path()
+    env_path = get_env_file_path()
     prefs = load_user_preferences()
 
-    print("Configuration:")
+    print("Configuration Files:")
     print(f"  User config: {config_path}")
     if config_path.exists():
-        print("  Status: Found")
+        print("    Status: Found")
     else:
-        print("  Status: Not configured (run --setup)")
+        print("    Status: Not configured (run --setup)")
+    print(f"  Saved keys:  {env_path}")
+    if env_path.exists():
+        print("    Status: Found")
+    else:
+        print("    Status: Not configured")
     print()
 
     # Defaults
@@ -271,6 +299,71 @@ def run_status() -> int:
     print()
 
     return 0
+
+
+def _setup_api_keys(only_providers: list[str] | None = None) -> None:
+    """Prompt user to enter API keys.
+
+    Args:
+        only_providers: If specified, only prompt for these providers.
+    """
+    providers_to_setup = only_providers or ["openai", "anthropic", "gemini"]
+
+    print("API Key Configuration")
+    print("-" * 40)
+    print()
+    print("Enter your API keys below. Press Enter to skip a provider.")
+    print("Keys will be saved to: " + str(get_env_file_path()))
+    print()
+
+    for provider in providers_to_setup:
+        var_name = API_KEY_VARS.get(provider, "")
+        if not var_name:
+            continue
+
+        # Skip if already set
+        if check_api_key(provider):
+            continue
+
+        # Get key info for user
+        key_info = {
+            "openai": "Get your key at: https://platform.openai.com/api-keys",
+            "anthropic": "Get your key at: https://console.anthropic.com/settings/keys",
+            "gemini": "Get your key at: https://aistudio.google.com/apikey",
+        }
+
+        print(f"{provider.upper()} API Key")
+        if provider in key_info:
+            print(f"  {key_info[provider]}")
+
+        api_key = _prompt_secret(f"  {var_name}: ")
+        if api_key:
+            save_api_key(provider, api_key)
+            print(f"  Saved {provider.upper()} key.")
+        else:
+            print(f"  Skipped {provider.upper()}.")
+        print()
+
+
+def _prompt_secret(message: str) -> str:
+    """Prompt for a secret value (API key).
+
+    Uses getpass if available for hidden input, otherwise regular input.
+
+    Args:
+        message: Prompt message.
+
+    Returns:
+        User input or empty string.
+    """
+    try:
+        import getpass
+
+        response = getpass.getpass(message)
+        return response.strip()
+    except Exception:
+        # Fall back to regular input
+        return _prompt(message, "")
 
 
 def _prompt(message: str, default: str = "") -> str:
