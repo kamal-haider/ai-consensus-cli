@@ -6,49 +6,38 @@ This document tracks Claude's active questions, comments, and concerns. Resolved
 
 ## Latest
 
-### Phase 4 Complete - UX + Docs Polish
+### Phase 5 Complete - Integration Testing + Packaging
 
 **Implemented:**
 
-1. **CLI Help Text (`src/aicx/__main__.py`)**
-   - Added epilog with usage examples and exit code reference
-   - Grouped arguments by category (Model Selection, Consensus, Context, Behavior, Config)
-   - Added `--version` flag (VERSION = "0.1.0")
-   - Improved help descriptions with metavars
+1. **Integration Tests (`tests/test_integration.py`)** - 27 tests:
+   - `TestConsensusHappyPath` (5 tests) - Full consensus loop
+   - `TestConsensusWithOptions` (3 tests) - Config variations
+   - `TestCLIParser` (9 tests) - Argument parsing
+   - `TestCLIVersion` (1 test) - Version verification
+   - `TestConfigIntegration` (4 tests) - Config loading
+   - `TestMockProviderIntegration` (3 tests) - Mock providers
+   - `TestEndToEnd` (2 tests) - CLI via subprocess
 
-2. **Error Documentation (`docs/errors.md`)**
-   - Comprehensive error type documentation with examples
-   - Resolution steps for each error type
-   - Updated retry documentation (now implemented, not "future")
-   - Exit code reference table
+2. **Packaging Updates (`pyproject.toml`)**:
+   - Python 3.10+ support (was 3.11+)
+   - Added `tomli>=2.0,<3.0; python_version < '3.11'`
+   - Updated status to "Alpha"
+   - Added Python 3.10 classifier
 
-3. **CLI Documentation (`docs/cli.md`)**
-   - Updated options tables with all flags
-   - Documented output format with consensus/disagreement examples
-   - Added more usage examples
-
-4. **Disagreement Summary + Confidence (`src/aicx/consensus/runner.py`)**
-   - Added `_calculate_confidence()` function (HIGH/MEDIUM/LOW)
-   - Enhanced `_build_disagreement_summary()` with:
-     - Consensus status line with approval count
-     - Confidence indicator
-     - Categorized issues (Critical/Objection/Missing)
-
-**All 391 tests pass.**
+**All 418 tests pass (391 unit + 27 integration).**
 
 ---
 
 ## Previous
 
-### Test Suite Fixes (Commit 839cc26)
+### Phase 4 Complete - UX + Docs Polish
 
-Fixed 23 test failures from Phase 3 verification.
+CLI help, error docs, disagreement summary with confidence indicator.
 
 ### Phase 3 Complete - Robustness + Limits
 
-1. Phase 3A: Quorum & Zero-Response Handling
-2. Phase 3B: Context Budget
-3. Phase 3C: Retry Policy
+Quorum handling, context budget, retry policy.
 
 ### Phase 2 Complete - Provider Adapters
 
@@ -56,6 +45,16 @@ Fixed 23 test failures from Phase 3 verification.
 
 ---
 
-## No Blocking Concerns
+## Project Complete
 
-Ready for Phase 5 (Integration Testing + Packaging).
+All 5 phases implemented:
+- Phase 0: Foundations
+- Phase 1: Core Implementation
+- Phase 2: Provider Adapters
+- Phase 3: Robustness + Limits
+- Phase 4: UX + Docs Polish
+- Phase 5: Integration Testing + Packaging
+
+**All changes on main branch.** GPT can pull to sync.
+
+Ready for real-world testing with actual API keys.

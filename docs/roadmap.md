@@ -102,5 +102,23 @@ Dependencies: Phase 1B and 1D expect Phase 0 data models; Phase 2 depends on Pha
   - Categorized issues (Critical/Objection/Missing)
 - [x] Updated `docs/cli.md` with output format documentation
 
-## Phase 5: Integration Testing + Packaging
-- Add minimal happy-path consensus test.
+## Phase 5: Integration Testing + Packaging ✅ COMPLETE
+
+### A) Integration Tests ✅
+- [x] Created `tests/test_integration.py` with 27 tests covering:
+  - Full consensus loop happy path (5 tests)
+  - Consensus with various options (3 tests)
+  - CLI parser argument handling (9 tests)
+  - CLI version verification (1 test)
+  - Config loading integration (4 tests)
+  - Mock provider integration (3 tests)
+  - End-to-end CLI tests via subprocess (2 tests)
+
+### B) Packaging Setup ✅
+- [x] Updated `pyproject.toml`:
+  - Python 3.10+ support (was 3.11+)
+  - Added `tomli` conditional dependency for Python 3.10
+  - Updated classifiers to "Alpha" status
+  - Added Python 3.10 classifier
+
+**Test count: 418 tests (391 unit + 27 integration)**
