@@ -11,6 +11,12 @@ from aicx.config import load_config
 from aicx.types import ConfigError, ShareMode
 
 
+@pytest.fixture(autouse=True)
+def isolate_user_config(monkeypatch, tmp_path):
+    """Isolate tests from user config by using a temp directory."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+
 def test_default_config_when_no_file_exists():
     """Test that defaults are loaded when no config file exists."""
     config = load_config(config_path="/nonexistent/path/config.toml")

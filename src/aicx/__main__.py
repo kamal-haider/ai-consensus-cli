@@ -28,6 +28,9 @@ Examples:
   aicx "Review this design" --verbose
       Enable detailed audit logging to stderr
 
+  aicx "Design an abstract class for API" --save-to ./docs/
+      Save output to a file with auto-generated name
+
   aicx --setup
       Run interactive setup wizard to configure defaults
 
@@ -173,6 +176,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to TOML config file (default: config/config.toml)",
     )
 
+    # Output options
+    output_group = parser.add_argument_group("Output")
+    output_group.add_argument(
+        "--save-to",
+        metavar="DIR",
+        default=None,
+        help="Save output to a file in DIR with auto-generated filename from prompt",
+    )
+
     return parser
 
 
@@ -245,10 +257,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         no_consensus_summary=args.no_consensus_summary,
     )
 
-    # Write output to stdout
-    sys.stdout.write(result.output)
-    if not result.output.endswith("\n"):
-        sys.stdout.write("\n")
+    # Save to file if --save-to specified
+    if args.save_to:
+        from aicx.output import save_output
+
+        file_path = save_output(result.output, args.save_to, args.prompt)
+        sys.stdout.write(f"Saved to: {file_path}\n")
+    else:
+        # Write output to stdout
+        sys.stdout.write(result.output)
+        if not result.output.endswith("\n"):
+            sys.stdout.write("\n")
 
     return result.exit_code
 
