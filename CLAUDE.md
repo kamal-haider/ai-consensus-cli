@@ -2,13 +2,26 @@
 
 ## Project Overview
 
-AI Consensus CLI (`aicx`) - A command-line tool that sends prompts to multiple AI models, runs structured critique rounds, and returns a consensus response.
+AI Query Tool (`aicx`) - A simple tool that allows an AI agent to query other AI models. The calling agent (e.g., Claude) handles synthesis and artifact creation.
 
 **Status:** Early ideation phase. No code written yet.
 
+## How It Works
+
+```
+User → Claude: "Create a doc on the best way to cook pasta"
+         ↓
+Claude → Tool: query("prompt", model="gpt-4o")
+Claude → Tool: query("prompt", model="gemini")
+         ↓
+Claude: Synthesizes responses + own thinking → Creates artifact
+```
+
+The tool does ONE thing: send a prompt to a model, return the response.
+
 ## Source of Truth
 
-**Primary reference:** `claude/skills.md` - Complete specification with all docs combined. Always consult this file for implementation details.
+**Primary reference:** `spec.md` - Complete specification for the tool.
 
 ## Feedback Protocol
 
@@ -33,52 +46,20 @@ When the user says "check for feedback" or similar, follow `docs/feedback-proces
 
 ## Slash Commands
 
-- `/spec` - Review the full specification from `claude/skills.md`
+- `/spec` - Review the full specification from `spec.md`
 - `/feedback` - Check and respond to GPT feedback
-
-## Key Documentation
-
-- `claude/skills.md` - **Primary reference** (all specs combined)
-- `spec.md` - Initial protocol draft and open questions
-- `docs/` - Individual specification files:
-  - `overview.md` - Goals, non-goals, principles
-  - `architecture.md` - Components and data flow
-  - `protocol.md` - Consensus protocol phases
-  - `consensus.md` - Criteria and stop conditions
-  - `data-models.md` - Dataclass schemas
-  - `prompts.md` - Prompt templates
-  - `cli.md` - CLI interface and flags
-  - `configuration.md` - Config file format (TOML)
-  - `providers.md` - Provider adapter contract
-  - `errors.md` - Error handling and exit codes
-  - `logging.md` - Verbose/audit logging format
-  - `security.md` - Security considerations
-  - `testing.md` - Test conventions
-  - `roadmap.md` - Phased milestones
 
 ## Project Structure (Planned)
 
 ```
-claude/
-  skills.md      # Complete specification (source of truth)
-.claude/
-  commands/      # Slash commands (/spec, /feedback)
-feedback/
-  FEEDBACK_CLAUDE.md  # Claude's feedback/questions
-  FEEDBACK_GPT.md     # GPT's feedback/questions
-docs/
-  feedback-process.md # Shared feedback protocol
-  *.md                # Individual spec documents
 src/aicx/
   __main__.py    # CLI entrypoint
-  config.py      # Config loading/validation
-  types.py       # Dataclasses and schemas
-  logging.py     # Verbose audit output
-  consensus/     # Consensus loop, digest, stop logic
-  models/        # Provider adapters
-  prompts/       # Prompt templates
-config/
-  config.toml    # Default configuration
+  config.py      # Config loading
+  providers/     # API adapters (openai, anthropic, google)
+    base.py
+    openai.py
+    anthropic.py
+    google.py
 tests/
   test_*.py      # Pytest tests
 ```
@@ -86,34 +67,25 @@ tests/
 ## Commands
 
 ```bash
-# Run CLI (planned)
-aicx "your prompt"
-aicx "prompt" --models gpt-4o,claude-3-5 --rounds 2 --verbose
+# Query a specific model
+aicx query "Your prompt" --model gpt-4o
+aicx query "Your prompt" --model gemini
+aicx query "Your prompt" --model claude-sonnet
 
 # Run tests
 pytest
 
-# Install for development (once pyproject.toml exists)
+# Install for development
 pip install -e .
 ```
 
-## Coding Conventions
+## Supported Models
 
-- **Language:** Python 3.11+
-- **Data structures:** Use dataclasses for structured data between stages
-- **Determinism:** Stable sorting, explicit seeds for any randomization
-- **Output:** Clean by default; verbose/audit only with `--verbose`
-- **Logging:** Write to stderr as JSON lines in verbose mode only
-- **ASCII:** Avoid non-ASCII unless file already uses it
-
-## Architecture Principles
-
-- Fail fast on config errors
-- Continue on individual model failures if quorum is met
-- Mediator failure aborts the run
-- No disk writes by default
-- No caching in v1
-- Sequential execution in v1 (parallel optional later)
+| Alias | Provider | Model ID |
+|-------|----------|----------|
+| gpt-4o | OpenAI | gpt-4o |
+| gemini | Google | gemini-1.5-pro |
+| claude-sonnet | Anthropic | claude-3-5-sonnet-20241022 |
 
 ## Provider Environment Variables
 
@@ -123,22 +95,29 @@ ANTHROPIC_API_KEY
 GEMINI_API_KEY
 ```
 
-## Consensus Protocol Summary
+## MCP Tool Interface
 
-1. Round 1: All participants answer independently
-2. Mediator synthesizes candidate answer + digest
-3. Round 2+: Participants critique candidate
-4. Mediator updates based on critiques
-5. Stop when: consensus reached OR max rounds (3) OR change < 10%
+For use as an MCP tool:
 
-**Consensus criteria:** >= 2/3 approvals AND zero critical objections
+```json
+{
+  "name": "query_model",
+  "parameters": {
+    "prompt": "The question to send",
+    "model": "gpt-4o | gemini | claude-sonnet | etc."
+  }
+}
+```
 
-**Note:** The mediator is not a participant in v1. It synthesizes and updates but does not contribute answers or votes.
+## Non-Goals
+
+- No consensus logic (calling agent handles synthesis)
+- No multi-round dialogue (single query/response)
+- No caching
+- No conversation history (stateless)
 
 ## Exit Codes
 
 - 0: Success
 - 1: Configuration error
-- 2: Provider/network error (including zero successful responses)
-- 3: Quorum failure (some responses, but below threshold)
-- 4: Internal error
+- 2: Provider/network error

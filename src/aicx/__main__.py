@@ -1,4 +1,4 @@
-"""CLI entrypoint for AI Consensus CLI."""
+"""AI Query Tool - Simple CLI for querying AI models."""
 
 from __future__ import annotations
 
@@ -6,66 +6,42 @@ import argparse
 import sys
 from typing import Sequence
 
-from aicx.config import load_config
-from aicx.consensus.runner import run_consensus
-from aicx.logging import configure_logging
-from aicx.types import ConfigError, ExitCode
+from aicx.providers import ProviderError, get_provider, list_models
 
 
-VERSION = "1.2.0"
+VERSION = "2.0.0"
 
 EXAMPLES = """
 Examples:
-  aicx "Explain Rust ownership"
-      Basic usage with default models
+  aicx query "Explain Rust ownership" --model gpt-4o
+      Query GPT-4o with a prompt
 
-  aicx "Summarize this code" --models gpt,claude --rounds 2
-      Use shorthand model names with fewer rounds
+  aicx query "Summarize this code" --model claude-sonnet
+      Query Claude Sonnet
 
-  aicx "Review this design" --models gpt-4o,claude-sonnet-4-20250514
-      Use specific model IDs directly
+  aicx query "What is Python?" --model gemini -v
+      Query Gemini with verbose output
 
-  aicx "Review this design" --verbose
-      Enable detailed audit logging to stderr
+  aicx query "Write a haiku" -s "You are a poet"
+      Include a system prompt
 
-  aicx "Design an abstract class for API" --save-to ./docs/
-      Save output to a file with auto-generated name
-
-  aicx --setup
-      Run interactive setup wizard to configure defaults
-
-  aicx --status
-      Show current configuration and API key status
-
-  aicx --ask "How do I configure a new model?"
-      Get quick help about the CLI
+  aicx models
+      List available models
 
 Exit Codes:
-  0  Success (consensus reached or best-effort answer)
-  1  Configuration error (invalid config file or flags)
-  2  Provider error (API failures, zero successful responses)
-  3  Quorum failure (some responses, but below threshold)
-  4  Internal error (unexpected exception)
+  0  Success
+  1  Configuration error (invalid model, missing API key)
+  2  Provider error (API failures, network errors)
 """
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for the CLI.
-
-    Returns:
-        Configured ArgumentParser.
-    """
+    """Build the argument parser for the CLI."""
     parser = argparse.ArgumentParser(
         prog="aicx",
-        description="AI Consensus CLI - Send prompts to multiple AI models and reach consensus.",
+        description="AI Query Tool - Query AI models and get responses.",
         epilog=EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "prompt",
-        nargs="?",
-        default=None,
-        help="The question or task to submit to the consensus loop",
     )
     parser.add_argument(
         "--version",
@@ -73,204 +49,112 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {VERSION}",
     )
 
-    # Setup and status commands
-    setup_group = parser.add_argument_group("Setup")
-    setup_group.add_argument(
-        "--setup",
-        action="store_true",
-        help="Run interactive setup wizard to configure default models and mediator",
-    )
-    setup_group.add_argument(
-        "--status",
-        action="store_true",
-        help="Show current configuration and API key status",
-    )
-    setup_group.add_argument(
-        "--ask",
-        metavar="QUESTION",
-        help="Ask a question about how to use the CLI",
-    )
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # Model selection
-    model_group = parser.add_argument_group("Model Selection")
-    model_group.add_argument(
-        "--models",
-        metavar="LIST",
-        help="Comma-separated model names to use as participants (e.g., gpt-4o,claude-3-5)",
-        default=None,
+    # Query command
+    query_parser = subparsers.add_parser(
+        "query",
+        help="Query a model",
+        description="Send a prompt to an AI model and get a response.",
     )
-    model_group.add_argument(
-        "--mediator",
-        metavar="NAME",
-        help="Model name to use as mediator for synthesis (must differ from participants)",
-        default=None,
+    query_parser.add_argument(
+        "prompt",
+        help="The prompt to send to the model",
     )
-
-    # Consensus parameters
-    consensus_group = parser.add_argument_group("Consensus Parameters")
-    consensus_group.add_argument(
-        "--rounds",
-        type=int,
-        metavar="N",
-        default=None,
-        help="Maximum consensus rounds before stopping (default: 3)",
+    query_parser.add_argument(
+        "-m", "--model",
+        default="gpt-4o",
+        help="Model to query (default: gpt-4o). Use 'aicx models' to list options.",
     )
-    consensus_group.add_argument(
-        "--approval-ratio",
+    query_parser.add_argument(
+        "-s", "--system",
+        metavar="PROMPT",
+        help="System prompt to set context/behavior",
+    )
+    query_parser.add_argument(
+        "-t", "--temperature",
         type=float,
-        metavar="RATIO",
-        default=None,
-        help="Fraction of approvals needed for consensus, 0.0-1.0 (default: 0.67)",
+        default=0.7,
+        help="Sampling temperature 0.0-2.0 (default: 0.7)",
     )
-    consensus_group.add_argument(
-        "--change-threshold",
-        type=float,
-        metavar="RATIO",
-        default=None,
-        help="Minimum change ratio to continue iterating (default: 0.10)",
-    )
-
-    # Context management
-    context_group = parser.add_argument_group("Context Management")
-    context_group.add_argument(
-        "--max-context-tokens",
+    query_parser.add_argument(
+        "--max-tokens",
         type=int,
-        metavar="N",
-        default=None,
-        help="Token budget for context; older rounds are truncated when exceeded",
+        default=4096,
+        help="Maximum response tokens (default: 4096)",
+    )
+    query_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=60,
+        help="Request timeout in seconds (default: 60)",
+    )
+    query_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Print status messages to stderr",
     )
 
-    # Behavior flags
-    behavior_group = parser.add_argument_group("Behavior")
-    behavior_group.add_argument(
-        "--share-mode",
-        default=None,
-        choices=["digest", "raw"],
-        help="How responses are shared: 'digest' (summarized) or 'raw' (full text)",
-    )
-    behavior_group.add_argument(
-        "--strict-json",
-        action="store_true",
-        default=None,
-        help="Fail immediately on JSON parse errors (no recovery attempts)",
-    )
-    behavior_group.add_argument(
-        "--verbose",
-        action="store_true",
-        default=None,
-        help="Write detailed JSONL audit log to stderr",
-    )
-    behavior_group.add_argument(
-        "--no-consensus-summary",
-        action="store_true",
-        default=False,
-        help="Suppress disagreement summary when consensus is not reached",
-    )
-
-    # Config file
-    config_group = parser.add_argument_group("Configuration")
-    config_group.add_argument(
-        "--config",
-        metavar="PATH",
-        default=None,
-        help="Path to TOML config file (default: config/config.toml)",
-    )
-
-    # Output options
-    output_group = parser.add_argument_group("Output")
-    output_group.add_argument(
-        "--save-to",
-        metavar="DIR",
-        default=None,
-        help="Save output to a file in DIR with auto-generated filename from prompt",
+    # Models command
+    subparsers.add_parser(
+        "models",
+        help="List available models",
+        description="Show all supported model aliases.",
     )
 
     return parser
 
 
+def run_query(args: argparse.Namespace) -> int:
+    """Run a query against a model."""
+    try:
+        if args.verbose:
+            print(f"Querying {args.model}...", file=sys.stderr)
+
+        provider = get_provider(args.model)
+        response = provider.query(
+            args.prompt,
+            system_prompt=args.system,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+        )
+
+        print(response)
+        return 0
+
+    except ProviderError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        if e.code == "auth":
+            return 1  # Config error
+        return 2  # Provider error
+
+
+def run_models() -> int:
+    """List available models."""
+    print("Available models:\n")
+    models = list_models()
+    for model in models:
+        print(f"  {model}")
+    print(f"\nUse: aicx query \"your prompt\" --model <model>")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Main entrypoint for the CLI.
-
-    Args:
-        argv: Command-line arguments, or None to use sys.argv.
-
-    Returns:
-        Exit code (0 for success, non-zero for errors).
-    """
-    # Load saved API keys from ~/.config/aicx/.env before anything else
-    from aicx.user_config import load_saved_api_keys
-
-    load_saved_api_keys()
-
+    """Main entry point for the CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Handle setup command
-    if args.setup:
-        from aicx.setup import run_setup
+    if args.command == "models":
+        return run_models()
 
-        return run_setup()
+    if args.command == "query":
+        return run_query(args)
 
-    # Handle status command
-    if args.status:
-        from aicx.setup import run_status
-
-        return run_status()
-
-    # Handle ask command
-    if args.ask:
-        from aicx.assistant import run_help_assistant
-
-        return run_help_assistant(args.ask)
-
-    # Require prompt for normal operation
-    if not args.prompt:
-        parser.print_help()
-        sys.stderr.write("\nError: prompt is required (or use --setup/--status)\n")
-        return ExitCode.CONFIG_ERROR
-
-    try:
-        # Load and validate configuration
-        config = load_config(
-            args.config,
-            models=args.models,
-            mediator=args.mediator,
-            rounds=args.rounds,
-            approval_ratio=args.approval_ratio,
-            change_threshold=args.change_threshold,
-            max_context_tokens=args.max_context_tokens,
-            share_mode=args.share_mode,
-            strict_json=args.strict_json,
-            verbose=args.verbose,
-        )
-    except ConfigError as e:
-        sys.stderr.write(f"Configuration error: {e}\n")
-        return ExitCode.CONFIG_ERROR
-
-    # Configure logging based on verbose flag
-    configure_logging(config.verbose)
-
-    # Run consensus loop
-    result = run_consensus(
-        prompt=args.prompt,
-        config=config,
-        no_consensus_summary=args.no_consensus_summary,
-    )
-
-    # Save to file if --save-to specified
-    if args.save_to:
-        from aicx.output import save_output
-
-        file_path = save_output(result.output, args.save_to, args.prompt)
-        sys.stdout.write(f"Saved to: {file_path}\n")
-    else:
-        # Write output to stdout
-        sys.stdout.write(result.output)
-        if not result.output.endswith("\n"):
-            sys.stdout.write("\n")
-
-    return result.exit_code
+    # No command - show help
+    parser.print_help()
+    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

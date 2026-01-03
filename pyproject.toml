@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aicx"
-version = "1.2.0"
-description = "CLI tool for multi-model AI consensus"
+version = "2.0.0"
+description = "Simple CLI tool for querying AI models"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "AI Consensus CLI Contributors" }
+    { name = "AI Query Tool Contributors" }
 ]
-keywords = ["ai", "consensus", "cli", "llm", "multi-model"]
+keywords = ["ai", "cli", "llm", "openai", "anthropic", "gemini"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -29,14 +29,11 @@ dependencies = [
     "openai>=1.0,<2.0",
     "anthropic>=0.18,<1.0",
     "google-genai>=1.0,<2.0",
-    "httpx>=0.25,<1.0",
-    "tomli>=2.0,<3.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0,<9.0",
-    "pytest-asyncio>=0.21,<1.0",
     "ruff>=0.1,<1.0",
     "mypy>=1.0,<2.0",
 ]
@@ -45,8 +42,8 @@ dev = [
 aicx = "aicx.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/example/ai-consensus-cli"
-Repository = "https://github.com/example/ai-consensus-cli"
+Homepage = "https://github.com/example/ai-query-tool"
+Repository = "https://github.com/example/ai-query-tool"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aicx"]
@@ -66,4 +63,3 @@ warn_unused_ignores = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"

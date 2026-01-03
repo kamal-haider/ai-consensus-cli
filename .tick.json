@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "text": "Remove old consensus/ directory",
+      "checked": true
+    },
+    {
+      "text": "Remove old context/ directory",
+      "checked": true
+    },
+    {
+      "text": "Remove old retry/ directory",
+      "checked": true
+    },
+    {
+      "text": "Remove old prompts/ directory",
+      "checked": true
+    },
+    {
+      "text": "Remove old models/ directory",
+      "checked": true
+    },
+    {
+      "text": "Remove unused modules (logging, config, types, etc.)",
+      "checked": true
+    }
+  ]
+}

@@ -1,109 +1,136 @@
-# AI Consensus CLI - Ideation Spec (Draft)
+# AI Query Tool - Specification
 
 ## Goal
-Build a CLI that sends a user prompt to multiple AI models, gathers their responses, iteratively shares critiques, and returns a consensus answer.
 
-## High-Level Flow
-1) User prompt -> send to N models
-2) Collect responses
-3) Share a summarized digest of others' responses to each model
-4) Each model returns: agreement, objections, and suggested edits
-5) A mediator (or structured voting) produces a revised candidate answer
-6) Repeat until convergence or stop conditions
+A simple tool that allows an AI agent (like Claude) to query other AI models and get their responses. The calling agent handles synthesis and artifact creation.
 
-## Proposed Protocol (Baseline)
-- Use a mediator loop:
-  - Round 1: participants answer the prompt
-  - Round 2+: mediator synthesizes -> participants approve/criticize -> mediator updates
-- Consensus criteria:
-  - Majority approval (>= 2/3) AND no critical objections
-- Stop conditions:
-  - Max rounds: 3
-  - Early stop: low delta in mediator output or consensus criteria met
+## How It Works
 
-## Defaults (Recommended)
-- Models: gpt-4o, claude-3-5, gemini-1.5
-- Mediator: gpt-4o (can be configurable later)
-- Audit trail: off by default; enable with --verbose
-- Share mode: summarized digest (not raw peer responses)
-- Weights: equal weights across models
-- Confidence: optional; captured when supported, but not required for consensus
-- Convergence fallback: if no consensus by max rounds, return best candidate + disagreement summary
+```
+User → Claude: "Create a doc on the best way to cook pasta"
+         ↓
+Claude thinks: "I'll get perspectives from other models"
+         ↓
+Claude → Tool: query("How to cook pasta perfectly?", model="gpt-4o")
+Claude → Tool: query("How to cook pasta perfectly?", model="gemini")
+         ↓
+Tool returns: GPT's answer, Gemini's answer
+         ↓
+Claude: Synthesizes all answers (including its own thinking) → Creates artifact
+```
 
-## Consensus Algorithm (Full Draft)
-1) Round 1: collect independent answers from all participants.
-2) Mediator builds a candidate_answer and rationale:
-   - Extract common claims
-   - Identify conflicts and missing points
-   - Draft a unified answer that resolves conflicts where possible
-3) Build a digest for participants:
-   - Common points across answers
-   - Top 3 objections (by frequency or severity)
-   - Top 3 missing items
-   - Suggested edits with short labels
-4) Round 2+ participant feedback:
-   - Provide candidate_answer + digest
-   - Each participant returns a critique object
-5) Mediator updates candidate_answer using critiques.
-6) Consensus reached if:
-   - approvals >= ceil(2/3 * participants)
-   - AND critical objections == 0
-7) Stop rules:
-   - Max rounds: 3
-   - Early stop if candidate_answer changes < 10% (measured by token diff or length delta)
-8) If no consensus at stop:
-   - Return best candidate_answer
-   - Attach disagreement summary (brief)
+## Core Functionality
 
-## Digest Format (Full Draft)
-- common_points: bullet list, 3-7 items
-- objections: bullet list, 1-5 items
-- missing: bullet list, 1-5 items
-- suggested_edits: bullet list with short labels
+The tool does ONE thing: send a prompt to a specified model and return the response.
 
-## Response Schema (Draft)
-Each model returns:
-- answer: string
-- approve: bool (if round > 1)
-- critical: bool (if round > 1)
-- objections: list of strings
-- missing: list of strings
-- edits: list of patch-style suggestions or bullet points
-- confidence: float (0-1, optional)
+```bash
+# CLI usage
+aicx query "Your prompt here" --model gpt-4o
+aicx query "Your prompt here" --model gemini-1.5-pro
+aicx query "Your prompt here" --model claude-3-5-sonnet
 
-Mediator returns:
-- candidate_answer: string
-- rationale: short summary of major changes
-- approval_count: int
-- critical_objections: list
-- disagreement_summary: short summary (only if no consensus)
+# Returns the model's response as plain text
+```
 
-## Open Questions
-- Which models are required in v1?
-- Does the user want an audit trail by default or only with a flag?
-- Should models see raw peer responses or a summarized digest?
-- Should there be a judge model, or only participants + mediator?
-- How to handle persistent disagreement (pick best answer vs return multiple)?
+## MCP Tool Interface
 
-## Non-Goals (v1)
-- Long-term memory or per-user personalization
-- Web browsing or tool-use by the models
-- Domain-specific compliance features
+For use as an MCP tool that Claude can invoke:
 
-## CLI UX (Sketch)
-- Run:
-  - aicx "your prompt"
-- Flags:
-  - --models gpt-4o,claude-3-5,gemini-1.5
-  - --rounds 3
-  - --verbose (print audit trail)
+```json
+{
+  "name": "query_model",
+  "description": "Query another AI model and get its response",
+  "parameters": {
+    "prompt": "The question or request to send",
+    "model": "Model to query (gpt-4o, gemini-1.5-pro, claude-3-5-sonnet, etc.)",
+    "system_prompt": "(optional) Custom system prompt"
+  }
+}
+```
 
-## Risks
-- Token growth across rounds
-- False consensus on incorrect answers
-- Oscillation or stalling without convergence
+## Supported Models
 
-## Next Steps
-- Finalize protocol and stop rules
-- Define internal data structures
-- Build CLI scaffold and config format
+| Alias | Provider | Model ID |
+|-------|----------|----------|
+| gpt-4o | OpenAI | gpt-4o |
+| gpt-4-turbo | OpenAI | gpt-4-turbo |
+| gemini | Google | gemini-1.5-pro |
+| gemini-flash | Google | gemini-1.5-flash |
+| claude-sonnet | Anthropic | claude-3-5-sonnet-20241022 |
+| claude-opus | Anthropic | claude-3-opus-20240229 |
+
+Custom model IDs can also be passed directly.
+
+## Configuration
+
+Environment variables for API keys:
+```
+OPENAI_API_KEY
+ANTHROPIC_API_KEY
+GEMINI_API_KEY
+```
+
+Optional config file (`~/.config/aicx/config.toml`):
+```toml
+[defaults]
+timeout_seconds = 60
+max_tokens = 4096
+temperature = 0.7
+
+[models.gpt-4o]
+provider = "openai"
+model_id = "gpt-4o"
+
+[models.gemini]
+provider = "google"
+model_id = "gemini-1.5-pro"
+```
+
+## Error Handling
+
+- Invalid API key → Clear error message with setup instructions
+- Model not found → List available models
+- Timeout → Return partial response if available, or error
+- Rate limit → Return error with retry-after if available
+
+## Non-Goals
+
+- **No consensus logic** - The calling agent handles synthesis
+- **No multi-round dialogue** - Single query/response per call
+- **No artifact creation** - The calling agent creates files
+- **No caching** - Each call is fresh
+- **No conversation history** - Stateless tool
+
+## Example Workflow
+
+User asks Claude to research a topic:
+
+1. User: "Compare the best approaches to state management in React"
+
+2. Claude decides to gather multiple perspectives:
+   - Calls `query_model(prompt="What are the best approaches to state management in React? Compare Redux, Zustand, Jotai, and Context API.", model="gpt-4o")`
+   - Calls `query_model(prompt="...", model="gemini")`
+   - Also formulates its own perspective
+
+3. Claude receives responses from each model
+
+4. Claude synthesizes all perspectives into a comprehensive comparison document
+
+5. Claude creates the artifact for the user
+
+## Implementation Phases
+
+### Phase 1: Core Tool
+- CLI with `query` command
+- OpenAI provider adapter
+- Basic error handling
+
+### Phase 2: More Providers
+- Anthropic adapter
+- Google Gemini adapter
+- Model alias system
+
+### Phase 3: MCP Integration
+- Package as MCP tool
+- Structured output support
+- Timeout/retry configuration
